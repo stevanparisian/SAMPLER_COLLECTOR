@@ -807,8 +807,9 @@ function RecView({ elapsed, analyser, onStop }: {
 
   return (
     <div style={{
-      minHeight: '100%', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 32, padding: 24,
+      display: 'flex', flexDirection: 'column', gap: 22,
+      maxWidth: 1080, margin: '0 auto', width: '100%',
+      alignItems: 'center', padding: '24px 0',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         <span style={{
@@ -821,7 +822,7 @@ function RecView({ elapsed, analyser, onStop }: {
       </div>
       <div className="input-box" style={{
         padding: 12, background: '#FFF',
-        display: 'flex', alignItems: 'flex-end', gap: 3, height: 140, width: 540,
+        display: 'flex', alignItems: 'flex-end', gap: 3, height: 280, width: '100%',
       }}>
         {bars.map((v, i) => (
           <span key={i} style={{
