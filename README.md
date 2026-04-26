@@ -1,158 +1,162 @@
-# TDS Sampler
+# SAMPLER_COLLECTOR
 
-**The Downward Spiral Sampling Machine**
-
-App de sampling automatisé inspirée par l'album *The Downward Spiral* de Nine Inch Nails. Elle va chercher des sons sur YouTube, les télécharge, les découpe et les charge dans des pads — prêts à être exportés vers ton MPC ou ton DAW.
+A retro-inspired audio sample collection and editing application with a classic **Mac OS 7 UI**. Record audio from browser tabs, organize samples into custom folders, and edit them with precision waveform controls.
 
 ---
 
-## Fonctionnalités
+## Features
 
-### 🎯 Auto Hunt
-- Donne un thème (ex: "dark industrial metal", "church organ minor key", "horror movie dialogue")
-- L'app cherche sur YouTube, télécharge l'audio, découpe un segment aléatoire et le charge dans tes pads
-- 18 presets curés façon TDS : orchestrations, machines industrielles, breakbeats, dialogues de films, drones, etc.
-- Réglage du nombre de samples, durée min/max par sample
+🎙️ **Record from Browser Tabs**
+- Capture audio directly from Chrome/Chromium tabs
+- Real-time frequency analyzer visualization
+- Clean WebM format with FFmpeg processing
 
-### ⊞ Sample Pads
-- 6 catégories : Industrial, Orchestral, Drums, Film/Dialog, Texture, Vocal/Noise
-- Lecture play/stop par clic sur le pad
-- Waveform avec trim start/end
-- Chaîne d'effets temps réel : distortion, filtre (LP/HP/BP/Notch), speed/pitch
-- Export en WAV
+📁 **Organized Library**
+- Create and manage custom sample folders
+- Browse by folder or date
+- View sample duration and metadata
 
-### ◉ Manual Rec
-- Capture audio système (enregistre directement le son d'un onglet Chrome)
-- Capture micro
-- VU-mètre en temps réel
+🎛️ **Waveform Editor**
+- Visual waveform with in/out point controls
+- Precise sample trimming
+- Play/stop with loop support
+- Real-time playback of selected region
 
-### 💾 Persistence
-- Les samples sont sauvegardés sur disque entre les sessions
-- Métadonnées (nom, catégorie, source YouTube) conservées dans `metadata.json`
-- Les fichiers WAV sont nommés de manière lisible : `industrial_factory_machine_ambient_01.wav`
+💾 **Save & Update**
+- Save trimmed samples with custom names
+- Update existing samples
+- Auto-organized folder structure
+
+🎨 **Retro UI**
+- Authentic Mac OS 7 styling
+- Pixel-perfect fonts with antialiasing
+- Classic window chrome and buttons
+- All-caps typography for that nostalgic feel
 
 ---
 
-## Prérequis
+## Requirements
 
 - **Node.js** (v18+) → [nodejs.org](https://nodejs.org)
-- **Python** (Anaconda ou autre) → pour yt-dlp
-- **yt-dlp** → `pip install yt-dlp`
-- **ffmpeg** → `brew install ffmpeg` ou `conda install -c conda-forge ffmpeg`
-- **Chrome** (recommandé pour la capture audio système)
+- **FFmpeg** → `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux)
+- **Chrome/Chromium** browser (for tab audio capture)
 
 ---
 
 ## Installation
 
 ```bash
-# 1. Clone ou copie le projet
-cd ~/Desktop/IA_APP/app_samples_for_mpc
+# Clone the repository
+git clone https://github.com/stevanparisian/SAMPLER_COLLECTOR.git
+cd SAMPLER_COLLECTOR
 
-# 2. Installe les dépendances frontend
+# Install frontend dependencies
 npm install
 
-# 3. Installe les dépendances backend
+# Install backend dependencies
 cd server && npm install && cd ..
-
-# 4. Installe yt-dlp et ffmpeg si pas déjà fait
-pip install yt-dlp
-brew install ffmpeg
 ```
 
 ---
 
-## Lancement
+## Usage
 
-Ouvre **deux terminaux** :
-
-**Terminal 1 — Backend :**
+**Terminal 1 — Start the backend:**
 ```bash
-export PATH="/usr/local/bin:$PATH"
-cd ~/Desktop/IA_APP/app_samples_for_mpc/server
+cd server
 npm start
 ```
 
-Tu dois voir :
+You should see:
 ```
-⚙️  TDS Sampler Backend running on http://localhost:3001
-✅ yt-dlp found
-✅ ffmpeg found
+✅ Server running on http://localhost:3001
+✅ FFmpeg available
 ```
 
-**Terminal 2 — Frontend :**
+**Terminal 2 — Start the frontend:**
 ```bash
-cd ~/Desktop/IA_APP/app_samples_for_mpc
 npm run dev
 ```
 
-Ouvre **http://localhost:5173** dans Chrome.
+Open **http://localhost:5173** in your browser.
 
 ---
 
-## Utilisation
+## How to Use
 
-### Chasse automatique
-1. Va sur l'onglet **Auto Hunt**
-2. Vérifie que le point vert "backend connected" est visible dans le header
-3. Tape un thème ou clique un preset
-4. Les samples arrivent dans tes pads automatiquement
+### Recording
+1. Click **● NEW REC…** button
+2. Select "Share tab audio" from Chrome's popup
+3. Choose the tab you want to record from
+4. Click **■ STOP & EDIT** when done
 
-### Capture manuelle
-1. Ouvre une vidéo YouTube dans un autre onglet
-2. Va sur l'onglet **Manual Rec**
-3. Sélectionne "System / Tab audio"
-4. Clique le bouton rouge ●
-5. Dans le popup du navigateur, sélectionne l'onglet YouTube et coche **"Share tab audio"**
-6. Clique ■ pour arrêter
-7. Le sample apparaît dans tes pads
+### Organizing
+1. Create folders by clicking the **＋** button
+2. View samples by folder or date using the **VIEW** buttons
+3. Click any sample to load it into the editor
 
-### Édition
-1. Clique **Edit** sur un pad
-2. Ajuste le trim avec les sliders
-3. Applique des effets (distortion, filtre, speed)
-4. Clique **▶ Preview** pour écouter le résultat
-5. Clique **↓** pour exporter le WAV
+### Editing
+1. Adjust **in** and **out** points on the waveform
+2. Preview with **▶ PLAY** / **■ STOP**
+3. Use **↻ LOOP** for continuous playback
+4. Enter a name for your sample
+5. Click **SAVE** to store it or **UPDATE** to replace an existing one
 
 ---
 
-## Structure du projet
+## Project Structure
 
 ```
-app_samples_for_mpc/
-├── index.html              # Point d'entrée HTML
-├── package.json            # Dépendances frontend (Vite + React)
-├── vite.config.js          # Config Vite
+SAMPLER_COLLECTOR/
+├── index.html              # HTML entry point
+├── package.json            # Frontend dependencies
+├── vite.config.ts          # Vite configuration
+├── tsconfig.json           # TypeScript config
 ├── src/
-│   ├── App.jsx             # Application React principale
-│   └── main.jsx            # Point d'entrée React
+│   ├── App.tsx             # Main React application
+│   ├── index.css           # Styling (retro UI)
+│   ├── main.tsx            # React entry point
+│   └── vite-env.d.ts       # Vite types
 ├── server/
-│   ├── index.js            # Backend Express + yt-dlp
-│   ├── package.json        # Dépendances backend
-│   └── samples/            # Samples téléchargés (WAV + metadata.json)
-└── README.md
+│   ├── src/index.ts        # Backend (Express.js)
+│   ├── package.json        # Backend dependencies
+│   └── samples/            # Stored audio files
+├── setup.sh                # Initial setup script
+└── start.sh                # Quick start script
 ```
 
 ---
 
-## Dépannage
+## Tech Stack
 
-| Problème | Solution |
-|----------|----------|
-| `ffmpeg: Symbol not found` | Conflit conda/brew. Faire `conda deactivate` puis `export PATH="/usr/local/bin:$PATH"` |
-| Backend offline (point rouge) | Vérifier que le terminal backend tourne sur le port 3001 |
-| Hunt ne capture rien | Vérifier `ffmpeg -version` et `yt-dlp --version` dans le terminal du backend |
-| Capture audio ne marche pas | Utiliser Chrome, cocher "Share tab audio" dans le popup |
-| Samples disparus après relance | Vérifier que le backend tourne — les samples sont chargés depuis `server/samples/` |
+- **Frontend** : React, TypeScript, Vite, Web Audio API
+- **Backend** : Express.js, TypeScript, FFmpeg
+- **Audio** : WAV format, 44.1kHz sample rate
+- **Styling** : CSS with Mac OS 7 aesthetic
 
 ---
 
-## Stack technique
+## Keyboard Shortcuts
 
-- **Frontend** : React + Vite, Web Audio API, MediaRecorder API
-- **Backend** : Express.js, yt-dlp, ffmpeg
-- **Audio** : WAV 44.1kHz mono
+- **Space** : Play/Stop (in Edit mode)
 
 ---
 
-*Inspiré par le processus de Trent Reznor sur The Downward Spiral (1994) — sampler tout ce qui existe, le détruire, et en faire quelque chose de nouveau.*
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Backend won't start | Check FFmpeg: `ffmpeg -version` |
+| No audio capture | Use Chrome/Chromium and enable "Share tab audio" |
+| Server port already in use | Change port in `server/src/index.ts` |
+| CORS errors | Ensure both frontend and backend are running |
+
+---
+
+## License
+
+MIT
+
+---
+
+*Built with retro aesthetic and modern web standards.*
