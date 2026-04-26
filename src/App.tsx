@@ -225,10 +225,6 @@ export default function App() {
     setPhase('idle');
   }, [stopPlayback]);
 
-  const discardChanges = useCallback(() => {
-    setName('');
-  }, []);
-
   const loadFromLibrary = useCallback(async (item: LibItem) => {
     try {
       stopPlayback();
@@ -392,7 +388,6 @@ export default function App() {
                 onAddFolder={addFolder}
                 category={category} setCategory={setCategory}
                 name={name} setName={setName}
-                onDiscard={discardChanges}
                 onSave={save}
                 isUpdate={!!editingRef}
               />
@@ -863,7 +858,7 @@ function EditView({
   playing, looping, onPlay, onStop, onToggleLoop,
   folders, onAddFolder,
   category, setCategory, name, setName,
-  onDiscard, onSave, isUpdate,
+  onSave, isUpdate,
 }: {
   buffer: AudioBuffer;
   start: number; end: number; duration: number;
@@ -875,7 +870,7 @@ function EditView({
   onAddFolder: (raw: string) => void;
   category: string; setCategory: (c: string) => void;
   name: string; setName: (n: string) => void;
-  onDiscard: () => void; onSave: () => void;
+  onSave: () => void;
   isUpdate: boolean;
 }) {
   const cropSec = end - start;
@@ -984,7 +979,6 @@ function EditView({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <Btn onClick={onDiscard}>CANCEL</Btn>
           <Btn onClick={onSave} primary>{isUpdate ? 'UPDATE' : 'SAVE'}</Btn>
         </div>
       </fieldset>
