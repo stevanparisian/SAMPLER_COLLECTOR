@@ -110,6 +110,15 @@ export default function App() {
   const playSelection = useCallback(() => playWith(looping), [playWith, looping]);
 
   useEffect(() => {
+    const src = playSrcRef.current;
+    if (!src || !playing || !looping) return;
+    try {
+      src.loopStart = start;
+      src.loopEnd = end;
+    } catch {}
+  }, [start, end, playing, looping]);
+
+  useEffect(() => {
     if (!playing || !buffer) return;
     let raf = 0;
     const ctx = playCtxRef.current;
