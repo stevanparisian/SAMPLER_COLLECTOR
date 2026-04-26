@@ -807,9 +807,9 @@ function RecView({ elapsed, analyser, onStop }: {
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', gap: 22,
+      minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 22,
       maxWidth: 1080, margin: '0 auto', width: '100%',
-      alignItems: 'center', padding: '24px 0',
+      alignItems: 'center', justifyContent: 'center', padding: '24px 0',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         <span style={{
