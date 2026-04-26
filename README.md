@@ -1,15 +1,16 @@
 # SAMPLER_COLLECTOR
 
-A retro-inspired audio sample collection and editing application with a classic **Mac OS 7 UI**. Record audio from browser tabs, organize samples into custom folders, and edit them with precision waveform controls.
+A retro-inspired audio sample collection and editing application with a classic **Mac OS 7 UI** inspiration. **Record audio directly from any browser tab** — capture YouTube videos, streaming audio, or any online content — then organize, edit, and trim samples with precision waveform controls.
 
 ---
 
 ## Features
 
-🎙️ **Record from Browser Tabs**
-- Capture audio directly from Chrome/Chromium tabs
-- Real-time frequency analyzer visualization
-- Clean WebM format with FFmpeg processing
+🎙️ **Record Audio Directly from Browser Tabs**
+- **Capture any online audio** — YouTube videos, streaming content, podcasts, etc.
+- Record directly from any Chrome/Chromium tab without downloads
+- Real-time frequency analyzer visualization during recording
+- Auto-converts to WAV format with FFmpeg
 
 📁 **Organized Library**
 - Create and manage custom sample folders
@@ -28,7 +29,7 @@ A retro-inspired audio sample collection and editing application with a classic 
 - Auto-organized folder structure
 
 🎨 **Retro UI**
-- Authentic Mac OS 7 styling
+- Mac OS 7 inspiration styling
 - Pixel-perfect fonts with antialiasing
 - Classic window chrome and buttons
 - All-caps typography for that nostalgic feel
@@ -39,7 +40,7 @@ A retro-inspired audio sample collection and editing application with a classic 
 
 ![SAMPLER_COLLECTOR Interface](./screenshot.png)
 
-*Sample Library on the left, Waveform Editor on the right with full editing controls*
+*Sample Library on the left, Waveform Editor on the right with editing controls*
 
 ---
 
