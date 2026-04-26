@@ -931,10 +931,6 @@ function EditView({
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
             <span style={{ width: 90, fontWeight: 700, fontSize: 13 }}>FOLDER:</span>
-            <Btn small onClick={() => {
-              const fname = prompt('New folder name:');
-              if (fname) onAddFolder(fname);
-            }}>＋ NEW…</Btn>
           </div>
           <div style={{
             display: 'flex', flexWrap: 'wrap', gap: 4,
@@ -958,6 +954,14 @@ function EditView({
                 </button>
               );
             })}
+            <button onClick={() => {
+              const fname = prompt('New folder name:');
+              if (fname) onAddFolder(fname);
+            }} style={{
+              background: '#FFF', border: '1px dashed #000',
+              padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}>+</button>
           </div>
         </div>
 
