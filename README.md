@@ -35,6 +35,14 @@ A retro-inspired audio sample collection and editing application with a classic 
 
 ---
 
+## Screenshots
+
+![SAMPLER_COLLECTOR Interface](./screenshot.png)
+
+*Sample Library on the left, Waveform Editor on the right with full editing controls*
+
+---
+
 ## Requirements
 
 - **Node.js** (v18+) → [nodejs.org](https://nodejs.org)
