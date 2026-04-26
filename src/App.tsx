@@ -225,6 +225,10 @@ export default function App() {
     setPhase('idle');
   }, [stopPlayback]);
 
+  const discardChanges = useCallback(() => {
+    setName('');
+  }, []);
+
   const loadFromLibrary = useCallback(async (item: LibItem) => {
     try {
       stopPlayback();
@@ -269,12 +273,12 @@ export default function App() {
       if (!r.ok) throw new Error(j.message || j.error || 'Failed');
       const file = (j.file as string).replace(/\.wav$/, '');
       setAlertMsg(`${editingRef ? 'Updated' : 'Saved'}:\nsamples/${category}/${file}.wav`);
-      goIdle();
+      setEditingRef({ cat: category, file: file + '.wav' });
       refreshLibrary();
     } catch (e: any) {
       setAlertMsg(e?.message || 'Error');
     }
-  }, [blob, name, category, start, end, editingRef, goIdle, refreshLibrary]);
+  }, [blob, name, category, start, end, editingRef, refreshLibrary]);
 
   const addFolder = useCallback((raw: string) => {
     const f = cleanName(raw);
@@ -372,7 +376,7 @@ export default function App() {
                 onAddFolder={addFolder}
                 category={category} setCategory={setCategory}
                 name={name} setName={setName}
-                onDiscard={goIdle}
+                onDiscard={discardChanges}
                 onSave={save}
                 isUpdate={!!editingRef}
               />
