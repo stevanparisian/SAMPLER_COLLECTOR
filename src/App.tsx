@@ -928,13 +928,10 @@ function EditView({
           SAVE SAMPLE
         </legend>
 
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-            <span style={{ width: 90, fontWeight: 700, fontSize: 13 }}>FOLDER:</span>
-          </div>
+        <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span style={{ width: 90, fontWeight: 700, fontSize: 13, paddingTop: 4 }}>FOLDER:</span>
           <div style={{
-            display: 'flex', flexWrap: 'wrap', gap: 4,
-            paddingLeft: 102,
+            display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1,
           }}>
             {folders.map(f => {
               const active = category === f;
