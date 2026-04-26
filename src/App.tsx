@@ -273,12 +273,28 @@ export default function App() {
       if (!r.ok) throw new Error(j.message || j.error || 'Failed');
       const file = (j.file as string).replace(/\.wav$/, '');
       setAlertMsg(`${editingRef ? 'Updated' : 'Saved'}:\nsamples/${category}/${file}.wav`);
-      setEditingRef({ cat: category, file: file + '.wav' });
+      stopPlayback();
+      const savedFile = file + '.wav';
+      const url = `/samples/${encodeURIComponent(category)}/${encodeURIComponent(savedFile)}?t=${Date.now()}`;
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const newBlob = await res.blob();
+          const ac = new AudioContext();
+          const newBuf = await ac.decodeAudioData(await newBlob.arrayBuffer());
+          ac.close();
+          setBlob(newBlob);
+          setBuffer(newBuf);
+          setStart(0);
+          setEnd(newBuf.duration);
+        }
+      } catch {}
+      setEditingRef({ cat: category, file: savedFile });
       refreshLibrary();
     } catch (e: any) {
       setAlertMsg(e?.message || 'Error');
     }
-  }, [blob, name, category, start, end, editingRef, refreshLibrary]);
+  }, [blob, name, category, start, end, editingRef, refreshLibrary, stopPlayback]);
 
   const addFolder = useCallback((raw: string) => {
     const f = cleanName(raw);
