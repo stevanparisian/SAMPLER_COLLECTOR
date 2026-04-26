@@ -669,7 +669,7 @@ function Library({
                 }} style={{
                   background: isConfirm ? '#BB0000' : 'transparent',
                   border: 'none', borderLeft: '1px solid ' + (active ? '#FFF' : '#000'),
-                  color: isConfirm ? '#FFF' : 'inherit',
+                  color: isConfirm ? '#FFF' : '#BB0000',
                   padding: '4px 7px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
                 }}>×</button>
               )}
