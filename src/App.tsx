@@ -247,7 +247,7 @@ export default function App() {
   }, [stopPlayback]);
 
   const cleanName = (s: string) =>
-    s.trim().toLowerCase().replace(/[^a-z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    s.trim().replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
 
   const save = useCallback(async () => {
     if (!blob) return;
@@ -1133,7 +1133,7 @@ function computePeaksAbs(buf: AudioBuffer, n: number): number[] {
 }
 
 function cleanNamePreview(s: string) {
-  return s.trim().toLowerCase().replace(/[^a-z0-9_\- ]/g, '').replace(/\s+/g, '_');
+  return s.trim().replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
 }
 
 function formatT(s: number): string {
