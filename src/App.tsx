@@ -20,7 +20,10 @@ export default function App() {
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
-  const [history, setHistory] = useState<{ start: number; end: number }[]>([]);
+  const [history, setHistory] = useState<{
+    start: number; end: number;
+    buffer: AudioBuffer; blob: Blob | null;
+  }[]>([]);
   const historyTimerRef = useRef<number | null>(null);
   const [category, setCategory] = useState<string>('kick');
   const [name, setName] = useState('');
@@ -277,6 +280,10 @@ export default function App() {
       fd.append('overwriteCat', editingRef.cat);
       fd.append('overwriteName', editingRef.file);
     }
+    const prevBuffer = buffer;
+    const prevBlob = blob;
+    const prevStart = start;
+    const prevEnd = end;
     try {
       const r = await fetch('/api/save', { method: 'POST', body: fd });
       const j = await r.json();
@@ -293,11 +300,13 @@ export default function App() {
           const ac = new AudioContext();
           const newBuf = await ac.decodeAudioData(await newBlob.arrayBuffer());
           ac.close();
+          if (prevBuffer) {
+            setHistory(prev => [...prev, { start: prevStart, end: prevEnd, buffer: prevBuffer, blob: prevBlob }]);
+          }
           setBlob(newBlob);
           setBuffer(newBuf);
           setStart(0);
           setEnd(newBuf.duration);
-          setHistory([]);
         }
       } catch {}
       setEditingRef({ cat: category, file: savedFile });
@@ -391,9 +400,9 @@ export default function App() {
                 start={start} end={end} duration={duration}
                 startFrac={startFrac} endFrac={endFrac} playheadFrac={playheadFrac}
                 onChangeFrac={(s, e) => {
-                  if (historyTimerRef.current === null) {
-                    setHistory(prev => [...prev, { start, end }]);
-                  } else {
+                  if (historyTimerRef.current === null && buffer) {
+                    setHistory(prev => [...prev, { start, end, buffer, blob }]);
+                  } else if (historyTimerRef.current !== null) {
                     clearTimeout(historyTimerRef.current);
                   }
                   historyTimerRef.current = window.setTimeout(() => {
@@ -405,7 +414,13 @@ export default function App() {
                 onUndo={() => {
                   if (history.length === 0) return;
                   const last = history[history.length - 1];
-                  if (last) { setStart(last.start); setEnd(last.end); }
+                  if (last) {
+                    stopPlayback();
+                    setBuffer(last.buffer);
+                    setBlob(last.blob);
+                    setStart(last.start);
+                    setEnd(last.end);
+                  }
                   setHistory(prev => prev.slice(0, -1));
                 }}
                 playing={playing} looping={looping}
