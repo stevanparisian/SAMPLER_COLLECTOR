@@ -20,6 +20,8 @@ export default function App() {
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(0);
+  const [history, setHistory] = useState<{ start: number; end: number }[]>([]);
+  const historyTimerRef = useRef<number | null>(null);
   const [category, setCategory] = useState<string>('kick');
   const [name, setName] = useState('');
   const [editingRef, setEditingRef] = useState<{ cat: string; file: string } | null>(null);
@@ -191,6 +193,7 @@ export default function App() {
         ac.close();
         setBuffer(buf);
         setStart(0); setEnd(buf.duration);
+        setHistory([]);
         setEditingRef(null); setName('');
         setPhase('edit');
         setPlaying(false); setPlayhead(null);
@@ -247,6 +250,7 @@ export default function App() {
       ac.close();
       setBlob(b); setBuffer(buf);
       setStart(0); setEnd(buf.duration);
+      setHistory([]);
       setCategory(item.cat); setName(item.name);
       setEditingRef({ cat: item.cat, file: item.file });
       setPhase('edit');
@@ -293,6 +297,7 @@ export default function App() {
           setBuffer(newBuf);
           setStart(0);
           setEnd(newBuf.duration);
+          setHistory([]);
         }
       } catch {}
       setEditingRef({ cat: category, file: savedFile });
@@ -385,7 +390,24 @@ export default function App() {
                 buffer={buffer}
                 start={start} end={end} duration={duration}
                 startFrac={startFrac} endFrac={endFrac} playheadFrac={playheadFrac}
-                onChangeFrac={(s, e) => { setStart(s * duration); setEnd(e * duration); }}
+                onChangeFrac={(s, e) => {
+                  if (historyTimerRef.current === null) {
+                    setHistory(prev => [...prev, { start, end }]);
+                  } else {
+                    clearTimeout(historyTimerRef.current);
+                  }
+                  historyTimerRef.current = window.setTimeout(() => {
+                    historyTimerRef.current = null;
+                  }, 500);
+                  setStart(s * duration); setEnd(e * duration);
+                }}
+                canUndo={history.length > 0}
+                onUndo={() => {
+                  if (history.length === 0) return;
+                  const last = history[history.length - 1];
+                  if (last) { setStart(last.start); setEnd(last.end); }
+                  setHistory(prev => prev.slice(0, -1));
+                }}
                 playing={playing} looping={looping}
                 onPlay={playSelection}
                 onStop={stopPlayback}
@@ -867,7 +889,7 @@ function EditView({
   playing, looping, onPlay, onStop, onToggleLoop,
   folders, onRequestNewFolder,
   category, setCategory, name, setName,
-  onSave, isUpdate,
+  onSave, isUpdate, canUndo, onUndo,
 }: {
   buffer: AudioBuffer;
   start: number; end: number; duration: number;
@@ -881,6 +903,8 @@ function EditView({
   name: string; setName: (n: string) => void;
   onSave: () => void;
   isUpdate: boolean;
+  canUndo: boolean;
+  onUndo: () => void;
 }) {
   const cropSec = end - start;
 
@@ -913,6 +937,7 @@ function EditView({
       }}>
         <Btn onClick={onPlay} disabled={playing} style={{ padding: '6px 26px', fontSize: 13 }}>▶ PLAY</Btn>
         <Btn onClick={onStop} disabled={!playing} style={{ padding: '6px 26px', fontSize: 13 }}>■ STOP</Btn>
+        <Btn onClick={onUndo} disabled={!canUndo} style={{ padding: '6px 26px', fontSize: 13 }}>↺ UNDO</Btn>
         <Btn onClick={onToggleLoop} style={{
           padding: '6px 26px', fontSize: 13,
           background: looping ? '#000' : undefined,
