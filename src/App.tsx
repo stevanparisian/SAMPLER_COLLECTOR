@@ -14,6 +14,7 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [promptOpen, setPromptOpen] = useState(false);
 
   const [blob, setBlob] = useState<Blob | null>(null);
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
@@ -347,11 +348,11 @@ export default function App() {
         <Library
           items={libraryItems}
           folders={folders}
-          setFolders={setFolders}
           onDeleteFolder={deleteFolder}
           currentId={editingRef ? `${editingRef.cat}/${editingRef.file}` : null}
           onOpen={loadFromLibrary}
           onNewRec={goIdle}
+          onRequestNewFolder={() => setPromptOpen(true)}
           style={{
             position: 'absolute',
             top: 72, left: 98,
@@ -385,7 +386,7 @@ export default function App() {
                   if (playing) playWith(next);
                 }}
                 folders={folders}
-                onAddFolder={addFolder}
+                onRequestNewFolder={() => setPromptOpen(true)}
                 category={category} setCategory={setCategory}
                 name={name} setName={setName}
                 onSave={save}
@@ -397,6 +398,13 @@ export default function App() {
       </div>
 
       {alertMsg && <AlertBox msg={alertMsg} onOk={() => setAlertMsg(null)} />}
+      {promptOpen && (
+        <PromptBox
+          msg="Enter a name for the new folder:"
+          onConfirm={(v) => { addFolder(v); setPromptOpen(false); }}
+          onCancel={() => setPromptOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -579,15 +587,15 @@ function TitleBar({ title, active = true, onClose, right }: {
 // ── Library ────────────────────────────────────────────────────────
 
 function Library({
-  items, folders, setFolders, onDeleteFolder, currentId, onOpen, onNewRec, style,
+  items, folders, onDeleteFolder, currentId, onOpen, onNewRec, onRequestNewFolder, style,
 }: {
   items: LibItem[];
   folders: string[];
-  setFolders: React.Dispatch<React.SetStateAction<string[]>>;
   onDeleteFolder: (f: string) => void;
   currentId: string | null;
   onOpen: (it: LibItem) => void;
   onNewRec: () => void;
+  onRequestNewFolder: () => void;
   style?: React.CSSProperties;
 }) {
   const [folderFilter, setFolderFilter] = useState<string>('ALL');
@@ -687,15 +695,7 @@ function Library({
             </span>
           );
         })}
-        <button onClick={() => {
-          const fname = prompt('Folder name:');
-          if (!fname) return;
-          const f = fname.trim().toLowerCase().replace(/[^a-z0-9_\- ]/g, '').replace(/\s+/g, '_');
-          if (f && !folders.includes(f)) {
-            setFolders(prev => [...prev, f]);
-            setFolderFilter(f);
-          }
-        }} style={{
+        <button onClick={onRequestNewFolder} style={{
           background: '#FFF', border: '1px dashed #000',
           padding: '4px 10px', fontSize: 12, cursor: 'pointer',
           fontFamily: 'inherit',
@@ -856,7 +856,7 @@ function EditView({
   buffer, start, end, duration,
   startFrac, endFrac, playheadFrac, onChangeFrac,
   playing, looping, onPlay, onStop, onToggleLoop,
-  folders, onAddFolder,
+  folders, onRequestNewFolder,
   category, setCategory, name, setName,
   onSave, isUpdate,
 }: {
@@ -867,7 +867,7 @@ function EditView({
   playing: boolean; looping: boolean;
   onPlay: () => void; onStop: () => void; onToggleLoop: () => void;
   folders: string[];
-  onAddFolder: (raw: string) => void;
+  onRequestNewFolder: () => void;
   category: string; setCategory: (c: string) => void;
   name: string; setName: (n: string) => void;
   onSave: () => void;
@@ -951,10 +951,7 @@ function EditView({
                 </button>
               );
             })}
-            <button onClick={() => {
-              const fname = prompt('New folder name:');
-              if (fname) onAddFolder(fname);
-            }} style={{
+            <button onClick={onRequestNewFolder} style={{
               background: '#FFF', border: '1px dashed #000',
               padding: '4px 10px', fontSize: 12, cursor: 'pointer',
               fontFamily: 'inherit',
@@ -1004,6 +1001,46 @@ function AlertBox({ msg, onOk }: { msg: string; onOk: () => void }) {
         </div>
         <div style={{ padding: '0 12px 12px', display: 'flex', justifyContent: 'flex-end' }}>
           <Btn onClick={onOk} primary>OK</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PromptBox modal ───────────────────────────────────────────────
+
+function PromptBox({ msg, onConfirm, onCancel }: {
+  msg: string; onConfirm: (value: string) => void; onCancel: () => void;
+}) {
+  const [value, setValue] = useState('');
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,.2)', zIndex: 100,
+    }}>
+      <div className="window" style={{ minWidth: 320, background: '#FFF' }}>
+        <TitleBar title="Collector" />
+        <div style={{ padding: 16, display: 'flex', gap: 12 }}>
+          <div style={{ fontSize: 28 }}>📁</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>{msg}</div>
+            <input
+              autoFocus
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && value.trim()) onConfirm(value);
+                if (e.key === 'Escape') onCancel();
+              }}
+              className="input-box"
+              style={{ width: '100%', fontSize: 13, padding: '6px 10px' }}
+            />
+          </div>
+        </div>
+        <div style={{ padding: '0 12px 12px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn onClick={onCancel}>CANCEL</Btn>
+          <Btn onClick={() => value.trim() && onConfirm(value)} primary>OK</Btn>
         </div>
       </div>
     </div>
