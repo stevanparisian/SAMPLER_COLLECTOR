@@ -38,9 +38,13 @@ A retro-inspired audio sample collection and editing application with a classic 
 
 ## Screenshots
 
-![SAMPLER_COLLECTOR Interface](./screenshot.png)
+![SAMPLER_COLLECTOR Interface](./screenshot_1.png)
 
 *Sample Library on the left, Waveform Editor on the right with editing controls*
+
+![SAMPLER_COLLECTOR Recording](./screenshot_2.png)
+
+*Recording view with real-time frequency analyzer*
 
 ---
 
