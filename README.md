@@ -70,11 +70,30 @@ npm install
 cd server && npm install && cd ..
 ```
 
+Make sure **FFmpeg** is installed:
+```bash
+# macOS
+brew install ffmpeg
+
+# Linux
+sudo apt install ffmpeg
+```
+
 ---
 
 ## Usage
 
-**Terminal 1 — Start the backend:**
+### Quick start (one command)
+
+```bash
+./start.sh
+```
+
+This launches both backend and frontend together. Press `Ctrl+C` to stop.
+
+### Manual start (two terminals)
+
+**Terminal 1 — Backend:**
 ```bash
 cd server
 npm start
@@ -82,38 +101,45 @@ npm start
 
 You should see:
 ```
-✅ Server running on http://localhost:3001
-✅ FFmpeg available
+⚙️  COLLECTOR Backend on http://localhost:3001
+📁 Samples: .../server/samples
+✅ ffmpeg found
 ```
 
-**Terminal 2 — Start the frontend:**
+**Terminal 2 — Frontend:**
 ```bash
 npm run dev
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **http://localhost:5173** in Chrome/Chromium.
 
 ---
 
 ## How to Use
 
-### Recording
-1. Click **● NEW REC…** button
-2. Select "Share tab audio" from Chrome's popup
-3. Choose the tab you want to record from
-4. Click **■ STOP & EDIT** when done
+### Recording from a Browser Tab
+1. Click **● NEW REC…** in the Sample Library
+2. Chrome will prompt you to choose what to share — pick the tab with the audio
+3. **Important:** check the **"Share tab audio"** box
+4. Click **Share** — recording starts immediately
+5. Click **■ STOP & EDIT** when done — the sample loads into the editor
 
-### Organizing
-1. Create folders by clicking the **＋** button
-2. View samples by folder or date using the **VIEW** buttons
-3. Click any sample to load it into the editor
+### Organizing Samples
+- Click **+** next to the folders to create a new category (a styled prompt appears)
+- Click any folder chip to filter the library
+- Use **⊞ FOLDER** or **◷ DATE** to switch grouping
+- Click the red **×** to delete a folder (click twice to confirm)
 
-### Editing
-1. Adjust **in** and **out** points on the waveform
-2. Preview with **▶ PLAY** / **■ STOP**
-3. Use **↻ LOOP** for continuous playback
-4. Enter a name for your sample
-5. Click **SAVE** to store it or **UPDATE** to replace an existing one
+### Editing a Sample
+1. **Trim** — drag the handles on the waveform to set in/out points
+2. **Preview** — click **▶ PLAY** or hit **Space**
+3. **Loop** — click **↻ LOOP** for continuous playback (live updates while you slide)
+4. **Undo / Redo** — use **↺ UNDO** / **↻ REDO** to revert trim or update operations
+5. **Pick a folder** in the SAVE SAMPLE panel
+6. **Name** the sample — uppercase, lowercase, numbers, `_` and `-` are allowed
+7. Click **SAVE** (new) or **UPDATE** (overwrite the loaded sample)
+
+After save/update, the waveform reloads with the trimmed audio so you can keep editing.
 
 ---
 
@@ -151,7 +177,9 @@ SAMPLER_COLLECTOR/
 
 ## Keyboard Shortcuts
 
-- **Space** : Play/Stop (in Edit mode)
+- **Space** : Play / Stop (in Edit mode)
+- **Enter** : Confirm in folder name prompt
+- **Escape** : Cancel folder name prompt
 
 ---
 
