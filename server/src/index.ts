@@ -154,19 +154,39 @@ function uniquePath(p: string): string {
   return path.join(dir, `${name}-${i}${ext}`);
 }
 
-// Reads PCM WAV header to get duration without decoding the whole file.
-// Assumes a standard 16-byte fmt chunk (which our ffmpeg output produces).
+// Parses WAV chunks to find fmt and data chunks, regardless of their order/size.
 function wavDurationSec(filepath: string): number {
+  let fd: number | null = null;
   try {
-    const fd = fs.openSync(filepath, 'r');
-    const buf = Buffer.alloc(44);
-    fs.readSync(fd, buf, 0, 44, 0);
-    fs.closeSync(fd);
-    const byteRate = buf.readUInt32LE(28);
-    const dataSize = buf.readUInt32LE(40);
-    if (byteRate <= 0) return 0;
+    fd = fs.openSync(filepath, 'r');
+    const header = Buffer.alloc(12);
+    fs.readSync(fd, header, 0, 12, 0);
+    if (header.toString('ascii', 0, 4) !== 'RIFF' || header.toString('ascii', 8, 12) !== 'WAVE') {
+      return 0;
+    }
+    let offset = 12;
+    let byteRate = 0;
+    let dataSize = 0;
+    const fileSize = fs.statSync(filepath).size;
+    const chunkHeader = Buffer.alloc(8);
+    while (offset + 8 <= fileSize) {
+      fs.readSync(fd, chunkHeader, 0, 8, offset);
+      const id = chunkHeader.toString('ascii', 0, 4);
+      const size = chunkHeader.readUInt32LE(4);
+      if (id === 'fmt ') {
+        const fmt = Buffer.alloc(Math.min(size, 16));
+        fs.readSync(fd, fmt, 0, fmt.length, offset + 8);
+        byteRate = fmt.readUInt32LE(8);
+      } else if (id === 'data') {
+        dataSize = size;
+        break;
+      }
+      offset += 8 + size + (size % 2);
+    }
+    if (byteRate <= 0 || dataSize <= 0) return 0;
     return dataSize / byteRate;
   } catch { return 0; }
+  finally { if (fd !== null) try { fs.closeSync(fd); } catch {} }
 }
 
 const PORT = 3001;
