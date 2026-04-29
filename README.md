@@ -1,6 +1,6 @@
 # SAMPLER_COLLECTOR
 
-A retro-inspired audio sample collection and editing application with a classic **Mac OS 7 UI** inspiration. **Record audio directly from any browser tab** — capture YouTube videos, streaming audio, or any online content — then organize, edit, and trim samples with precision waveform controls.
+An editorial-styled audio sample collection and editing application — cream paper, EB Garamond serif, and a single quiet orange accent. **Record audio directly from any browser tab** — capture YouTube videos, streaming audio, or any online content — then organize, edit, and trim samples with precision waveform controls.
 
 ---
 
@@ -28,11 +28,11 @@ A retro-inspired audio sample collection and editing application with a classic 
 - Update existing samples
 - Auto-organized folder structure
 
-🎨 **Retro UI**
-- Mac OS 7 inspiration styling
-- Pixel-perfect fonts with antialiasing
-- Classic window chrome and buttons
-- All-caps typography for that nostalgic feel
+🎨 **Editorial UI**
+- Cream paper background (`#f3eee3` / `#fbf7ec`) with ink-black type
+- EB Garamond serif headlines + Inter small-caps sans labels
+- Single quiet orange accent (`#d44a1f`) for in/out markers and the record action
+- Two-pane layout: catalogue (left) / editor or recording (right)
 
 ---
 
@@ -118,26 +118,26 @@ Open **http://localhost:5173** in Chrome/Chromium.
 ## How to Use
 
 ### Recording from a Browser Tab
-1. Click **● NEW REC…** in the Sample Library
+1. Click **record a tab** (orange button) in the Sample Library
 2. Chrome will prompt you to choose what to share — pick the tab with the audio
 3. **Important:** check the **"Share tab audio"** box
 4. Click **Share** — recording starts immediately
-5. Click **■ STOP & EDIT** when done — the sample loads into the editor
+5. Click **■ stop & edit** when done — the sample loads into the editor
 
 ### Organizing Samples
-- Click **+** next to the folders to create a new category (a styled prompt appears)
-- Click any folder chip to filter the library
-- Use **⊞ FOLDER** or **◷ DATE** to switch grouping
-- Click the red **×** to delete a folder (click twice to confirm)
+- Click **+ new** to create a new category (an editorial prompt appears)
+- Click any folder chip to filter the catalogue
+- Use **folder** or **date** to switch grouping
+- Click the **×** on a folder chip to delete it (click twice to confirm)
 
 ### Editing a Sample
-1. **Trim** — drag the handles on the waveform to set in/out points
-2. **Preview** — click **▶ PLAY** or hit **Space**
-3. **Loop** — click **↻ LOOP** for continuous playback (live updates while you slide)
-4. **Undo / Redo** — use **↺ UNDO** / **↻ REDO** to revert trim or update operations
-5. **Pick a folder** in the SAVE SAMPLE panel
-6. **Name** the sample — uppercase, lowercase, numbers, `_` and `-` are allowed
-7. Click **SAVE** (new) or **UPDATE** (overwrite the loaded sample)
+1. **Trim** — drag the orange in/out markers on the waveform to set the selection
+2. **Preview** — click **▶ play** or hit **Space**
+3. **Loop** — click **↻ loop** for continuous playback (live updates while you slide)
+4. **Undo / Redo** — use **↺ undo** / **↻ redo** to revert trim or update operations
+5. **Pick a folder** in the *save sample* panel
+6. **Name** the sample — letters, numbers, `_` and `-` are allowed
+7. Click **save ↗** (new) or **update ↗** (overwrite the loaded sample)
 
 After save/update, the waveform reloads with the trimmed audio so you can keep editing.
 
@@ -153,7 +153,7 @@ SAMPLER_COLLECTOR/
 ├── tsconfig.json           # TypeScript config
 ├── src/
 │   ├── App.tsx             # Main React application
-│   ├── index.css           # Styling (retro UI)
+│   ├── index.css           # Editorial palette + tokens
 │   ├── main.tsx            # React entry point
 │   └── vite-env.d.ts       # Vite types
 ├── server/
@@ -171,7 +171,7 @@ SAMPLER_COLLECTOR/
 - **Frontend** : React, TypeScript, Vite, Web Audio API
 - **Backend** : Express.js, TypeScript, FFmpeg
 - **Audio** : WAV format, 44.1kHz sample rate
-- **Styling** : CSS with Mac OS 7 aesthetic
+- **Typography** : EB Garamond (serif) + Inter (sans, small caps)
 
 ---
 
@@ -200,4 +200,4 @@ MIT
 
 ---
 
-*Built with retro aesthetic and modern web standards.*
+*Built with an editorial aesthetic and modern web standards.*

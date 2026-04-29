@@ -6,6 +6,18 @@ const DEFAULT_FOLDERS = [
   'bass', 'nappe', 'lead', 'vocal', 'fx', 'loop',
 ];
 
+// Editorial palette — mirrored in index.css
+const ED_BG = '#f3eee3';
+const ED_PAPER = '#fbf7ec';
+const ED_INK = '#181613';
+const ED_DIM = '#8d8475';
+const ED_RULE = '#cfc6b3';
+const ED_ACC = '#d44a1f';
+const ED_SOFT = '#fff7e6';
+
+const SERIF = "'EB Garamond', 'Cormorant Garamond', Georgia, serif";
+const SANS = "'Inter', ui-sans-serif, system-ui, sans-serif";
+
 type Phase = 'idle' | 'rec' | 'edit';
 type LibRaw = Record<string, { name: string; size: number; mtime: number; dur: number }[]>;
 type LibItem = { id: string; cat: string; name: string; file: string; dur: number; mtime: number };
@@ -227,7 +239,7 @@ export default function App() {
       setElapsed(0);
       setPhase('rec');
     } catch (e: any) {
-      setAlertMsg(e?.message || 'Capture refusée');
+      setAlertMsg(e?.message || 'Capture refused');
     }
   }, []);
 
@@ -235,6 +247,20 @@ export default function App() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     recRef.current?.stop();
   }, []);
+
+  const cancelRecording = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try { recRef.current?.stop(); } catch {}
+    recRef.current = null;
+    chunksRef.current = [];
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    recCtxRef.current?.close().catch(() => {});
+    recCtxRef.current = null;
+    setAnalyser(null);
+    setElapsed(0);
+    setPhase(buffer ? 'edit' : 'idle');
+  }, [buffer]);
 
   const goIdle = useCallback(() => {
     stopPlayback();
@@ -319,7 +345,7 @@ export default function App() {
     } catch (e: any) {
       setAlertMsg(e?.message || 'Error');
     }
-  }, [blob, name, category, start, end, editingRef, refreshLibrary, stopPlayback]);
+  }, [blob, name, category, start, end, editingRef, buffer, refreshLibrary, stopPlayback]);
 
   const addFolder = useCallback((raw: string) => {
     const f = cleanName(raw);
@@ -361,113 +387,120 @@ export default function App() {
     return out;
   }, [libraryRaw]);
 
-  const titleForMain =
-    phase === 'idle' ? 'COLLECTOR.APP' :
-    phase === 'rec' ? '● RECORDING…' :
-    editingRef ? `EDIT — ${name}.wav` : 'UNTITLED.WAV';
+  const currentId = editingRef ? `${editingRef.cat}/${editingRef.file}` : null;
+  const trackIndex = useMemo(() => {
+    if (!currentId) return null;
+    const idx = libraryItems.findIndex(i => i.id === currentId);
+    return idx >= 0 ? idx + 1 : null;
+  }, [currentId, libraryItems]);
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <MenuBar count={libraryItems.length} ffmpegOk={ffmpegOk} />
+    <div style={{
+      width: '100%', height: '100%',
+      background: ED_BG, color: ED_INK,
+      fontFamily: SERIF,
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
+    }}>
+      <StatusBar ffmpegOk={ffmpegOk} count={libraryItems.length} />
 
       <div style={{
-        flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden',
+        flex: 1, padding: 22, display: 'flex', gap: 22, minHeight: 0,
       }}>
         <Library
           items={libraryItems}
           folders={folders}
-          onDeleteFolder={deleteFolder}
-          currentId={editingRef ? `${editingRef.cat}/${editingRef.file}` : null}
+          libraryRaw={libraryRaw}
+          phase={phase}
+          currentId={currentId}
           onOpen={loadFromLibrary}
-          onNewRec={goIdle}
+          onNewRec={() => phase === 'rec' ? cancelRecording() : startRecording()}
+          onDeleteFolder={deleteFolder}
           onRequestNewFolder={() => setPromptOpen(true)}
-          style={{
-            position: 'absolute',
-            top: 72, left: 98,
-            width: 460, height: 'min(873px, calc(100% - 60px))',
-          }}
         />
 
-        <div className="window" style={{
-          position: 'absolute',
-          top: 72, left: 650,
-          width: 'min(1080px, calc(100% - 560px))',
-          height: 'calc(100% - 150px)',
-          display: 'flex', flexDirection: 'column',
-        }}>
-          <TitleBar title={titleForMain} onClose={phase !== 'idle' ? goIdle : undefined} />
-          <div style={{ flex: 1, overflowY: 'auto', padding: '32px 40px', background: '#FFFFFF' }}>
-            {phase === 'idle' && <IdleView onStart={startRecording} />}
-            {phase === 'rec' && <RecView elapsed={elapsed} analyser={analyser} onStop={stopRecording} />}
-            {phase === 'edit' && buffer && (
-              <EditView
-                buffer={buffer}
-                start={start} end={end} duration={duration}
-                startFrac={startFrac} endFrac={endFrac} playheadFrac={playheadFrac}
-                onChangeFrac={(s, e) => {
-                  if (historyTimerRef.current === null && buffer) {
-                    setHistory(prev => [...prev, { start, end, buffer, blob }]);
-                    setRedoStack([]);
-                  } else if (historyTimerRef.current !== null) {
-                    clearTimeout(historyTimerRef.current);
-                  }
-                  historyTimerRef.current = window.setTimeout(() => {
-                    historyTimerRef.current = null;
-                  }, 500);
-                  setStart(s * duration); setEnd(e * duration);
-                }}
-                canUndo={history.length > 0}
-                onUndo={() => {
-                  if (history.length === 0) return;
-                  const last = history[history.length - 1];
-                  if (last && buffer) {
-                    stopPlayback();
-                    setRedoStack(prev => [...prev, { start, end, buffer, blob }]);
-                    setBuffer(last.buffer);
-                    setBlob(last.blob);
-                    setStart(last.start);
-                    setEnd(last.end);
-                  }
-                  setHistory(prev => prev.slice(0, -1));
-                }}
-                canRedo={redoStack.length > 0}
-                onRedo={() => {
-                  if (redoStack.length === 0) return;
-                  const next = redoStack[redoStack.length - 1];
-                  if (next && buffer) {
-                    stopPlayback();
-                    setHistory(prev => [...prev, { start, end, buffer, blob }]);
-                    setBuffer(next.buffer);
-                    setBlob(next.blob);
-                    setStart(next.start);
-                    setEnd(next.end);
-                  }
-                  setRedoStack(prev => prev.slice(0, -1));
-                }}
-                playing={playing} looping={looping}
-                onPlay={playSelection}
-                onStop={stopPlayback}
-                onToggleLoop={() => {
-                  const next = !looping;
-                  setLooping(next);
-                  if (playing) playWith(next);
-                }}
-                folders={folders}
-                onRequestNewFolder={() => setPromptOpen(true)}
-                category={category} setCategory={setCategory}
-                name={name} setName={setName}
-                onSave={save}
-                isUpdate={!!editingRef}
-              />
-            )}
-          </div>
-        </div>
+        {phase === 'rec' ? (
+          <Recording
+            elapsed={elapsed}
+            analyser={analyser}
+            onStop={stopRecording}
+            onCancel={cancelRecording}
+          />
+        ) : phase === 'edit' && buffer ? (
+          <Editor
+            buffer={buffer}
+            name={name}
+            displayName={editingRef ? name : (name || 'untitled')}
+            trackIndex={trackIndex}
+            duration={duration}
+            start={start} end={end}
+            startFrac={startFrac} endFrac={endFrac} playheadFrac={playheadFrac}
+            onChangeFrac={(s, e) => {
+              if (historyTimerRef.current === null && buffer) {
+                setHistory(prev => [...prev, { start, end, buffer, blob }]);
+                setRedoStack([]);
+              } else if (historyTimerRef.current !== null) {
+                clearTimeout(historyTimerRef.current);
+              }
+              historyTimerRef.current = window.setTimeout(() => {
+                historyTimerRef.current = null;
+              }, 500);
+              setStart(s * duration); setEnd(e * duration);
+            }}
+            playing={playing}
+            looping={looping}
+            onPlay={playSelection}
+            onStop={stopPlayback}
+            onToggleLoop={() => {
+              const next = !looping;
+              setLooping(next);
+              if (playing) playWith(next);
+            }}
+            canUndo={history.length > 0}
+            onUndo={() => {
+              if (history.length === 0) return;
+              const last = history[history.length - 1];
+              if (last && buffer) {
+                stopPlayback();
+                setRedoStack(prev => [...prev, { start, end, buffer, blob }]);
+                setBuffer(last.buffer);
+                setBlob(last.blob);
+                setStart(last.start);
+                setEnd(last.end);
+              }
+              setHistory(prev => prev.slice(0, -1));
+            }}
+            canRedo={redoStack.length > 0}
+            onRedo={() => {
+              if (redoStack.length === 0) return;
+              const next = redoStack[redoStack.length - 1];
+              if (next && buffer) {
+                stopPlayback();
+                setHistory(prev => [...prev, { start, end, buffer, blob }]);
+                setBuffer(next.buffer);
+                setBlob(next.blob);
+                setStart(next.start);
+                setEnd(next.end);
+              }
+              setRedoStack(prev => prev.slice(0, -1));
+            }}
+            folders={folders}
+            onRequestNewFolder={() => setPromptOpen(true)}
+            category={category} setCategory={setCategory}
+            setName={setName}
+            onSave={save}
+            onCancel={goIdle}
+            isUpdate={!!editingRef}
+          />
+        ) : (
+          <IdleEditor onStart={startRecording} hasItems={libraryItems.length > 0} />
+        )}
       </div>
 
       {alertMsg && <AlertBox msg={alertMsg} onOk={() => setAlertMsg(null)} />}
       {promptOpen && (
         <PromptBox
-          msg="Enter a name for the new folder:"
+          msg="Name your new folder"
           onConfirm={(v) => { addFolder(v); setPromptOpen(false); }}
           onCancel={() => setPromptOpen(false)}
         />
@@ -476,200 +509,127 @@ export default function App() {
   );
 }
 
-// ── MenuBar ────────────────────────────────────────────────────────
+// ── StatusBar ──────────────────────────────────────────────────────
 
-function MenuBar({ ffmpegOk }: { count: number; ffmpegOk: boolean | null }) {
+function StatusBar({ ffmpegOk, count }: { ffmpegOk: boolean | null; count: number }) {
   const connected = ffmpegOk === true;
-  const lightColor =
-    ffmpegOk == null ? '#888888' :
-    connected ? '#22CC44' : '#BB0000';
   const label =
-    ffmpegOk == null ? 'CONNECTING…' :
-    connected ? 'CONNECTED' : 'DISCONNECTED';
+    ffmpegOk == null ? 'connecting…' :
+    connected ? 'connected · ffmpeg ok · 44.1 kHz' : 'disconnected · ffmpeg missing';
   return (
     <div style={{
-      height: 30, background: '#FFFFFF',
-      borderBottom: '1px solid #000',
-      display: 'flex', alignItems: 'center',
-      padding: '0 8px',
-      fontFamily: 'var(--chicago)', fontSize: 12,
-      flexShrink: 0,
+      height: 30, padding: '0 22px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      fontFamily: SANS, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: ED_DIM,
+      borderBottom: `1px solid ${ED_RULE}`, background: ED_BG, flexShrink: 0,
     }}>
-      <RainbowApple />
-      <span style={{ marginLeft: 10, fontWeight: 700 }}>COLLECTOR</span>
-      <span style={{ marginLeft: 6, color: '#555' }}>v1.3</span>
-      <div style={{ flex: 1 }} />
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 6, color: '#000',
-      }}>
-        <span style={{
-          width: 9, height: 9,
-          background: lightColor,
-          border: '1px solid #000',
-          boxShadow: connected
-            ? `inset -1px -1px 0 rgba(0,0,0,.35), inset 1px 1px 0 rgba(255,255,255,.6), 0 0 3px ${lightColor}`
-            : 'inset -1px -1px 0 rgba(0,0,0,.35), inset 1px 1px 0 rgba(255,255,255,.45)',
-          display: 'inline-block',
-        }} />
-        <span style={{ fontSize: 12 }}>{label}</span>
-      </span>
+      <span>collector &nbsp;·&nbsp; <span style={{ color: ED_INK }}>vol. i / iss. {String(count).padStart(2, '0')}</span></span>
+      <span><span style={{ color: connected ? ED_ACC : ED_DIM }}>●</span> {label}</span>
     </div>
   );
 }
 
-function RainbowApple() {
-  return (
-    <svg width="13" height="15" viewBox="0 0 13 15" style={{ display: 'block' }}>
-      <defs>
-        <clipPath id="apple-clip">
-          <path d="
-            M 8.2 3.2
-            C 8.4 2.4 8.7 1.4 9.5 0.6
-            C 8.5 0.6 7.7 1.2 7.2 2.0
-            C 6.8 1.5 6.2 1.2 5.4 1.2
-            C 6.0 1.0 6.6 0.4 6.8 0.0
-            C 5.8 0.0 4.9 0.5 4.4 1.3
-            C 3.9 1.0 3.3 0.9 2.6 1.1
-            C 0.9 1.5 -0.1 3.2 0.3 5.5
-            C 0.7 8.0 2.5 11.5 4.5 13.4
-            C 5.3 14.2 6.1 14.2 6.7 13.6
-            C 7.2 13.2 7.7 13.2 8.3 13.6
-            C 8.9 14.0 9.7 14.0 10.5 13.2
-            C 12.5 11.3 13.5 8.0 13.0 5.5
-            C 12.6 3.2 11.0 1.8 9.0 2.0
-            C 8.6 2.0 8.3 2.4 8.2 3.2 Z
-            M 9.1 1.0
-            C 9.4 0.4 10.1 -0.1 11.0 -0.1
-            C 11.0 0.7 10.5 1.4 9.9 1.7
-            C 9.5 1.9 9.0 1.7 9.1 1.0 Z
-          " />
-        </clipPath>
-      </defs>
-      <g clipPath="url(#apple-clip)">
-        <rect x="0" y="0"     width="13" height="2.5" fill="#5DB44C"/>
-        <rect x="0" y="2.5"   width="13" height="2.5" fill="#FCB827"/>
-        <rect x="0" y="5"     width="13" height="2.5" fill="#F5821F"/>
-        <rect x="0" y="7.5"   width="13" height="2.5" fill="#E03A3E"/>
-        <rect x="0" y="10"    width="13" height="2.5" fill="#963D97"/>
-        <rect x="0" y="12.5"  width="13" height="2.5" fill="#3072F1"/>
-      </g>
-    </svg>
-  );
-}
+// ── Panel (cream card) ────────────────────────────────────────────
 
-// ── Btn (3D bevel) ─────────────────────────────────────────────────
-
-function Btn({
-  children, onClick, primary, disabled, danger, small, style,
+function Panel({
+  kicker, title, right, children, style,
 }: {
+  kicker: string;
+  title: React.ReactNode;
+  right?: React.ReactNode;
   children: React.ReactNode;
-  onClick?: () => void;
-  primary?: boolean;
-  disabled?: boolean;
-  danger?: boolean;
-  small?: boolean;
   style?: React.CSSProperties;
 }) {
-  const [down, setDown] = useState(false);
-  const cls = down && !disabled ? 'bevel-in' : 'bevel-out';
   return (
-    <button
-      onMouseDown={() => !disabled && setDown(true)}
-      onMouseUp={() => setDown(false)}
-      onMouseLeave={() => setDown(false)}
-      onClick={() => !disabled && onClick && onClick()}
-      disabled={disabled}
-      className={cls}
-      style={{
-        padding: small ? '2px 10px' : '3px 14px',
-        fontFamily: 'var(--chicago)',
-        fontWeight: primary ? 700 : 400,
-        fontSize: small ? 11 : 12,
-        color: disabled ? '#888' : (danger ? '#BB0000' : '#000'),
-        cursor: disabled ? 'default' : 'pointer',
-        borderRadius: primary ? 7 : 3,
-        outline: primary ? '2px solid #000' : 'none',
-        outlineOffset: primary ? '1px' : '0',
-        ...style,
+    <div style={{
+      background: ED_PAPER,
+      border: `1px solid ${ED_RULE}`,
+      display: 'flex', flexDirection: 'column',
+      minHeight: 0, minWidth: 0,
+      ...style,
+    }}>
+      <div style={{
+        padding: '14px 22px 12px',
+        borderBottom: `1px solid ${ED_RULE}`,
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12,
+        flexShrink: 0,
       }}>
-      {children}
-    </button>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM }}>{kicker}</div>
+          <div style={{
+            fontFamily: SERIF, fontSize: 22, lineHeight: 1.1, marginTop: 2, color: ED_INK,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{title}</div>
+        </div>
+        {right != null && (
+          <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: ED_DIM, textAlign: 'right' }}>{right}</div>
+        )}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{children}</div>
+    </div>
   );
 }
 
-// ── TitleBar ──────────────────────────────────────────────────────
+// ── FolderChip ────────────────────────────────────────────────────
 
-function TitleBar({ title, active = true, onClose, right }: {
-  title: string; active?: boolean; onClose?: () => void; right?: React.ReactNode;
+function FolderChip({
+  label, active, count, onClick, onDelete, dashed,
+}: {
+  label: string;
+  active?: boolean;
+  count?: number | null;
+  onClick?: () => void;
+  onDelete?: () => void;
+  dashed?: boolean;
 }) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center',
-      borderBottom: '1px solid #000',
-      background: active ? '#FFFFFF' : '#DDDDDD',
-      height: 18, position: 'relative', flexShrink: 0,
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      border: dashed ? `1px dashed ${ED_RULE}` : (active ? `1px solid ${ED_INK}` : `1px solid ${ED_RULE}`),
+      background: active ? ED_INK : 'transparent',
+      color: active ? ED_PAPER : ED_INK,
     }}>
-      {active && (
-        <div className="titlebar-stripes" style={{
-          position: 'absolute', left: 0, top: 2, right: 0, bottom: 2,
-        }} />
-      )}
-      {onClose && (
-        <button onClick={onClose} title="Close" style={{
-          position: 'relative', zIndex: 2, marginLeft: 4,
-          width: 11, height: 11, border: '1px solid #000',
-          background: '#FFFFFF', cursor: 'pointer', padding: 0,
-          boxShadow: 'inset 1px 1px 0 #FFF, inset -1px -1px 0 #888',
-        }} />
-      )}
-      {!onClose && <div style={{ width: 4 }} />}
-      <div style={{
-        position: 'relative', zIndex: 2, flex: 1, textAlign: 'center',
-        background: active ? '#FFFFFF' : 'transparent',
-        padding: '0 10px',
-        fontWeight: 700, fontFamily: 'var(--chicago)', fontSize: 12,
-        lineHeight: '16px',
+      <button onClick={onClick} style={{
+        fontFamily: SANS, fontSize: 11, letterSpacing: 1.5, textTransform: 'uppercase',
+        padding: '5px 12px',
+        background: 'transparent', border: 'none', color: 'inherit',
+        cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-        {title}
-      </div>
-      {right ? (
-        <div style={{
-          position: 'relative', zIndex: 2,
-          marginRight: 4, background: '#FFF', padding: '0 4px',
-          fontSize: 10, fontFamily: 'var(--mono)',
-        }}>
-          {right}
-        </div>
-      ) : (
-        <div style={{
-          position: 'relative', zIndex: 2, marginRight: 4,
-          width: 11, height: 11, border: '1px solid #000', background: '#FFFFFF',
-          boxShadow: 'inset 1px 1px 0 #FFF, inset -1px -1px 0 #888',
-        }} />
+        <span>{label}</span>
+        {count != null && <span style={{ color: active ? ED_PAPER : ED_DIM, fontSize: 10 }}>{count}</span>}
+      </button>
+      {onDelete && (
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete folder" style={{
+          background: 'transparent', border: 'none', borderLeft: `1px solid ${active ? ED_PAPER : ED_RULE}`,
+          color: active ? ED_PAPER : ED_DIM,
+          padding: '4px 8px', cursor: 'pointer', fontFamily: SANS, fontSize: 10,
+        }}>×</button>
       )}
-    </div>
+    </span>
   );
 }
 
 // ── Library ────────────────────────────────────────────────────────
 
 function Library({
-  items, folders, onDeleteFolder, currentId, onOpen, onNewRec, onRequestNewFolder, style,
+  items, folders, libraryRaw, phase, currentId, onOpen, onNewRec, onDeleteFolder, onRequestNewFolder,
 }: {
   items: LibItem[];
   folders: string[];
-  onDeleteFolder: (f: string) => void;
+  libraryRaw: LibRaw;
+  phase: Phase;
   currentId: string | null;
   onOpen: (it: LibItem) => void;
   onNewRec: () => void;
+  onDeleteFolder: (f: string) => void;
   onRequestNewFolder: () => void;
-  style?: React.CSSProperties;
 }) {
-  const [folderFilter, setFolderFilter] = useState<string>('ALL');
+  const [folderFilter, setFolderFilter] = useState<string>('all');
   const [groupBy, setGroupBy] = useState<'folder' | 'date'>('folder');
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
-  const folderFiltered = folderFilter === 'ALL' ? items : items.filter(i => i.cat === folderFilter);
+  const folderFiltered = folderFilter === 'all' ? items : items.filter(i => i.cat === folderFilter);
 
   const groups: [string, LibItem[]][] = useMemo(() => {
     if (groupBy === 'date') {
@@ -691,119 +651,127 @@ function Library({
   }, [folderFiltered, groupBy]);
 
   return (
-    <div className="window" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, ...style }}>
-      <TitleBar title="📁 SAMPLE LIBRARY" right={
-        <span style={{ fontSize: 10, fontFamily: 'var(--mono)' }}>{items.length}</span>
-      } />
-
+    <Panel
+      kicker="catalogue"
+      title="Sample Library"
+      right={<>{items.length} {items.length === 1 ? 'piece' : 'pieces'}</>}
+      style={{ width: 380, flex: 'none' }}
+    >
+      {/* Top: Record button + view toggle */}
       <div style={{
-        padding: 30, borderBottom: '1px solid #000',
-        background: '#DDDDDD',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        padding: '18px 22px 14px',
+        display: 'flex', gap: 12, alignItems: 'center',
+        borderBottom: `1px solid ${ED_RULE}`,
       }}>
-        <Btn onClick={onNewRec} primary style={{ color: '#BB0000', padding: '9px 14px', fontSize: 17 }}>
-          ● NEW REC…
-        </Btn>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 700 }}>VIEW:</span>
-          <div style={{ display: 'flex', gap: 0 }}>
-            {(['folder', 'date'] as const).map(t => (
-              <Btn key={t} small onClick={() => setGroupBy(t)} style={{
-                background: groupBy === t ? '#000' : undefined,
-                color: groupBy === t ? '#FFF' : '#000',
-                fontWeight: groupBy === t ? 700 : 400,
-              }}>
-                {t === 'folder' ? '⊞ FOLDER' : '◷ DATE'}
-              </Btn>
-            ))}
-          </div>
+        <button onClick={onNewRec} style={{
+          flex: 1,
+          padding: '12px 14px',
+          background: phase === 'rec' ? ED_INK : ED_ACC,
+          color: ED_PAPER, border: 'none', cursor: 'pointer',
+          fontFamily: SANS, fontSize: 11, letterSpacing: 2.5, textTransform: 'uppercase',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: 99, background: ED_PAPER, display: 'inline-block',
+            animation: phase === 'rec' ? 'recPulse 1s infinite' : undefined,
+          }} />
+          {phase === 'rec' ? 'recording…' : 'record a tab'}
+        </button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['folder', 'date'] as const).map(t => {
+            const active = groupBy === t;
+            return (
+              <button key={t} onClick={() => setGroupBy(t)} style={{
+                padding: '6px 10px', fontFamily: SANS, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+                border: active ? `1px solid ${ED_INK}` : `1px solid ${ED_RULE}`,
+                background: active ? ED_INK : 'transparent',
+                color: active ? ED_PAPER : ED_INK,
+                cursor: 'pointer',
+              }}>{t}</button>
+            );
+          })}
         </div>
       </div>
 
-      {/* folder chips */}
-      <div style={{
-        padding: 30, borderBottom: '1px solid #000',
-        background: '#FFFFFF',
-        display: 'flex', flexWrap: 'wrap', gap: 10,
-      }}>
-        {(['ALL', ...folders]).map(c => {
-          const active = folderFilter === c;
-          const isConfirm = confirmDel === c;
-          return (
-            <span key={c} style={{
-              display: 'inline-flex', alignItems: 'center',
-              background: active ? '#000' : '#FFF',
-              color: active ? '#FFF' : '#000',
-              border: '1px solid #000',
-              fontSize: 12,
-            }}>
-              <button onClick={() => setFolderFilter(c)} style={{
-                background: 'transparent', border: 'none', color: 'inherit',
-                padding: '9px 12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
-                fontWeight: active ? 900 : 900,
-              }}>{c.toUpperCase()}</button>
-              {c !== 'ALL' && (
-                <button onClick={() => {
+      {/* Folder chips */}
+      <div style={{ padding: '14px 22px', borderBottom: `1px solid ${ED_RULE}` }}>
+        <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM, marginBottom: 10 }}>filter</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <FolderChip label="all" active={folderFilter === 'all'} count={items.length} onClick={() => setFolderFilter('all')} />
+          {folders.map(f => {
+            const cnt = (libraryRaw[f] || []).length;
+            const isConfirm = confirmDel === f;
+            return (
+              <FolderChip
+                key={f}
+                label={isConfirm ? `${f}?` : f}
+                active={folderFilter === f}
+                count={cnt > 0 ? cnt : null}
+                onClick={() => setFolderFilter(f)}
+                onDelete={() => {
                   if (isConfirm) {
-                    if (folderFilter === c) setFolderFilter('ALL');
-                    onDeleteFolder(c);
+                    if (folderFilter === f) setFolderFilter('all');
+                    onDeleteFolder(f);
                     setConfirmDel(null);
                     return;
                   }
-                  setConfirmDel(c);
-                  setTimeout(() => setConfirmDel(prev => (prev === c ? null : prev)), 3000);
-                }} style={{
-                  background: isConfirm ? '#BB0000' : 'transparent',
-                  border: 'none', borderLeft: '1px solid ' + (active ? '#FFF' : '#000'),
-                  color: isConfirm ? '#FFF' : '#BB0000',
-                  padding: '4px 7px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
-                }}>×</button>
-              )}
-            </span>
-          );
-        })}
-        <button onClick={onRequestNewFolder} style={{
-          background: '#FFF', border: '1px dashed #000',
-          padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-          fontFamily: 'inherit',
-        }}>+</button>
+                  setConfirmDel(f);
+                  setTimeout(() => setConfirmDel(prev => (prev === f ? null : prev)), 3000);
+                }}
+              />
+            );
+          })}
+          <FolderChip label="+ new" dashed onClick={onRequestNewFolder} />
+        </div>
       </div>
 
-      {/* sample list */}
-      <div style={{ flex: 1, overflowY: 'auto', background: '#FFF' }}>
+      {/* Sample list, grouped */}
+      <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
         {groups.length === 0 && (
-          <div style={{ padding: 36, textAlign: 'center', color: '#888', fontSize: 12 }}>
-            — no samples —
+          <div style={{
+            padding: '40px 22px', textAlign: 'center', color: ED_DIM,
+            fontFamily: SERIF, fontStyle: 'italic', fontSize: 16,
+          }}>
+            — no samples yet —
           </div>
         )}
         {groups.map(([group, list]) => (
           <div key={group}>
             <div style={{
-              padding: '6px 14px', background: '#DDDDDD',
-              borderTop: '1px solid #000', borderBottom: '1px solid #000',
-              fontWeight: 700, fontSize: 12,
-              display: 'flex', justifyContent: 'space-between',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              padding: '14px 22px 6px',
+              fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM,
+              borderTop: `1px solid ${ED_RULE}`,
+              background: ED_BG,
             }}>
-              <span>▼ {group}</span>
-              <span style={{ fontFamily: 'var(--mono)', color: '#555' }}>{list.length}</span>
+              <span style={{ color: ED_INK }}>{group}</span>
+              <span>{list.length} {list.length === 1 ? 'piece' : 'pieces'}</span>
             </div>
-            {list.map(it => {
+            {list.map((it, i) => {
               const active = currentId === it.id;
               return (
                 <div key={it.id} onClick={() => onOpen(it)} style={{
-                  padding: '6px 14px',
-                  background: active ? 'var(--accent)' : 'transparent',
-                  color: active ? '#FFF' : '#000',
+                  display: 'grid', gridTemplateColumns: '24px 1fr 56px',
+                  alignItems: 'baseline', padding: '11px 22px',
+                  borderBottom: `1px solid ${ED_RULE}`,
+                  background: active ? ED_SOFT : 'transparent',
                   cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  fontSize: 13, fontFamily: 'var(--chicago)',
+                  gap: 10,
                 }}>
-                  <span style={{ fontSize: 13 }}>♪</span>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {it.name}
+                  <span style={{ fontFamily: SANS, fontSize: 10, color: ED_DIM, letterSpacing: 1 }}>
+                    {String(i + 1).padStart(2, '0')}
                   </span>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: active ? '#FFF' : '#666' }}>
-                    {it.dur > 0 ? `${it.dur.toFixed(2)}s` : ''}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: SERIF, fontSize: 18, color: active ? ED_ACC : ED_INK, lineHeight: 1.1,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>{it.name.replace(/_/g, ' ')}</div>
+                    <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: ED_DIM, marginTop: 2 }}>
+                      {it.cat}
+                    </div>
+                  </div>
+                  <span style={{ fontFamily: SANS, fontSize: 11, color: ED_DIM, textAlign: 'right', letterSpacing: 0.5 }}>
+                    {it.dur > 0 ? formatT(it.dur) : ''}
                   </span>
                 </div>
               );
@@ -811,67 +779,291 @@ function Library({
           </div>
         ))}
       </div>
-    </div>
+    </Panel>
   );
 }
 
-// ── IdleView ──────────────────────────────────────────────────────
+// ── IdleEditor (no sample loaded) ─────────────────────────────────
 
-function IdleView({ onStart }: { onStart: () => void }) {
+function IdleEditor({ onStart, hasItems }: { onStart: () => void; hasItems: boolean }) {
   return (
-    <div style={{
-      minHeight: '100%', display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 36, padding: 32,
-    }}>
-      <svg width="200" height="200" viewBox="0 0 64 64" style={{ imageRendering: 'pixelated' }}>
-        <rect x="8" y="6" width="48" height="44" fill="#FFF" stroke="#000" strokeWidth="2"/>
-        <rect x="12" y="10" width="40" height="28" fill="#000"/>
-        <g fill="#FFF">
-          {[14,18,22,26,30,34,38,42,46,50].map((x,i)=>{
-            const h = [4,8,16,12,20,14,22,10,6,8][i];
-            return <rect key={i} x={x} y={24 - (h ?? 0)/2} width="2" height={h}/>;
-          })}
-        </g>
-        <rect x="20" y="50" width="24" height="6" fill="#FFF" stroke="#000" strokeWidth="2"/>
-        <rect x="14" y="56" width="36" height="4" fill="#FFF" stroke="#000" strokeWidth="2"/>
-      </svg>
-      <div style={{ textAlign: 'center', fontFamily: 'var(--chicago)' }}>
-        <div style={{ fontSize: 32, fontWeight: 700, marginBottom: 14, letterSpacing: 1 }}>
-          Welcome to Collector
+    <Panel kicker="edit" title="Untitled" right={<>no track</>} style={{ flex: 1, minWidth: 0 }}>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 24, padding: 40, textAlign: 'center',
+      }}>
+        <div style={{ fontFamily: SERIF, fontSize: 44, lineHeight: 1.1, color: ED_INK, maxWidth: 560 }}>
+          Capture, trim, save.
         </div>
-        <div style={{ fontSize: 14, color: '#444', maxWidth: 520, lineHeight: 1.5 }}>
-          Collect a sound from any tab. Pick a Chrome tab,
-          tick "Share tab audio", and stop when you hear what you want.
+        <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 17, color: ED_DIM, maxWidth: 460, lineHeight: 1.45 }}>
+          Pick a Chrome tab, tick "Share tab audio", and stop when you hear something worth keeping.
         </div>
+        <button onClick={onStart} style={{
+          marginTop: 8,
+          padding: '14px 28px', background: ED_ACC, color: ED_PAPER, border: 'none', cursor: 'pointer',
+          fontFamily: SANS, fontSize: 11, letterSpacing: 2.5, textTransform: 'uppercase',
+          display: 'inline-flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ width: 8, height: 8, borderRadius: 99, background: ED_PAPER }} />
+          record a tab
+        </button>
+        {hasItems && (
+          <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 14, color: ED_DIM, marginTop: 6 }}>
+            — or pick a piece from the catalogue —
+          </div>
+        )}
       </div>
-      <Btn onClick={onStart} primary style={{ padding: '10px 30px', color: '#BB0000', fontSize: 15 }}>
-        ● RECORD TAB…
-      </Btn>
-      <div style={{ fontSize: 12, color: '#666', fontFamily: 'var(--mono)' }}>
-        — OR CLICK A SAMPLE IN THE LIBRARY —
-      </div>
-    </div>
+    </Panel>
   );
 }
 
-// ── RecView ───────────────────────────────────────────────────────
+// ── Editor ────────────────────────────────────────────────────────
 
-function RecView({ elapsed, analyser, onStop }: {
-  elapsed: number; analyser: AnalyserNode | null; onStop: () => void;
+function Editor({
+  buffer, name, displayName, trackIndex, duration,
+  start, end, startFrac, endFrac, playheadFrac, onChangeFrac,
+  playing, looping, onPlay, onStop, onToggleLoop,
+  canUndo, onUndo, canRedo, onRedo,
+  folders, onRequestNewFolder,
+  category, setCategory, setName,
+  onSave, onCancel, isUpdate,
+}: {
+  buffer: AudioBuffer;
+  name: string;
+  displayName: string;
+  trackIndex: number | null;
+  duration: number;
+  start: number; end: number;
+  startFrac: number; endFrac: number; playheadFrac: number | null;
+  onChangeFrac: (s: number, e: number) => void;
+  playing: boolean; looping: boolean;
+  onPlay: () => void; onStop: () => void; onToggleLoop: () => void;
+  canUndo: boolean; onUndo: () => void;
+  canRedo: boolean; onRedo: () => void;
+  folders: string[]; onRequestNewFolder: () => void;
+  category: string; setCategory: (c: string) => void;
+  setName: (n: string) => void;
+  onSave: () => void; onCancel: () => void; isUpdate: boolean;
 }) {
-  const N = 36;
-  const [bars, setBars] = useState<number[]>(Array(N).fill(0));
+  const cropSec = end - start;
+  const titleText = displayName.replace(/_/g, ' ') || 'untitled';
+  const trackLabel = trackIndex != null
+    ? `track ${String(trackIndex).padStart(2, '0')} · ${formatT(duration)}`
+    : `untitled · ${formatT(duration)}`;
+
+  return (
+    <Panel kicker="edit" title={titleText} right={<>{trackLabel}</>} style={{ flex: 1, minWidth: 0 }}>
+      <div style={{
+        padding: 24, display: 'flex', flexDirection: 'column', gap: 22, flex: 1,
+        minHeight: 0, overflow: 'auto',
+      }}>
+        {/* Waveform */}
+        <Waveform
+          buffer={buffer}
+          startFrac={startFrac} endFrac={endFrac}
+          playheadFrac={playheadFrac}
+          onChangeFrac={onChangeFrac}
+          duration={duration}
+        />
+
+        {/* Range readout */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24,
+          padding: '20px 0 0', borderTop: `1px solid ${ED_RULE}`,
+        }}>
+          {([
+            ['in', formatT(start), false],
+            ['out', formatT(end), false],
+            ['crop', formatT(cropSec), true],
+            ['total', formatT(duration), false],
+          ] as const).map(([k, v, accent]) => (
+            <div key={k}>
+              <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM }}>{k}</div>
+              <div style={{
+                fontFamily: SERIF, fontSize: 30, color: accent ? ED_ACC : ED_INK,
+                lineHeight: 1, marginTop: 4,
+              }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Transport */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+        }}>
+          <TransportButton primary onClick={onPlay} disabled={playing}>▶ play</TransportButton>
+          <TransportButton onClick={onStop} disabled={!playing}>■ stop</TransportButton>
+          <TransportButton onClick={onToggleLoop} active={looping}>↻ loop {looping ? 'on' : 'off'}</TransportButton>
+          <span style={{ width: 1, height: 22, background: ED_RULE }} />
+          <TransportButton ghost onClick={onUndo} disabled={!canUndo}>↺ undo</TransportButton>
+          <TransportButton ghost onClick={onRedo} disabled={!canRedo}>↻ redo</TransportButton>
+          <div style={{ flex: 1 }} />
+          <span style={{ color: ED_DIM, fontStyle: 'italic', fontFamily: SERIF, fontSize: 14, textTransform: 'none', letterSpacing: 0 }}>
+            space = play · stop
+          </span>
+        </div>
+
+        {/* Save panel */}
+        <div style={{ paddingTop: 22, borderTop: `1px solid ${ED_RULE}` }}>
+          <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM, marginBottom: 10 }}>
+            save sample
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 18, alignItems: 'end' }}>
+            <div>
+              <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: ED_DIM, marginBottom: 6 }}>folder</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                {folders.map(f => (
+                  <FolderChip key={f} label={f} active={category === f} onClick={() => setCategory(f)} />
+                ))}
+                <FolderChip label="+ new" dashed onClick={onRequestNewFolder} />
+              </div>
+
+              <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: ED_DIM, marginBottom: 6 }}>name</div>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') onSave(); }}
+                placeholder={`${category}_01`}
+                style={{
+                  width: '100%',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: `1px solid ${ED_INK}`,
+                  padding: '6px 0',
+                  fontFamily: SERIF, fontSize: 22, color: ED_INK,
+                  outline: 'none',
+                }}
+              />
+              <div style={{ fontFamily: SANS, fontSize: 10, color: ED_DIM, marginTop: 8, letterSpacing: 0.5 }}>
+                → samples / {category} / {cleanNamePreview(name) || category + '_xx'}.wav
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={onCancel} style={{
+                padding: '14px 22px', background: 'transparent', color: ED_INK,
+                border: `1px solid ${ED_RULE}`,
+                fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}>cancel</button>
+              <button onClick={onSave} style={{
+                padding: '14px 28px', background: ED_INK, color: ED_PAPER, border: 'none',
+                fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}>{isUpdate ? 'update ↗' : 'save ↗'}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function TransportButton({
+  children, onClick, disabled, primary, active, ghost,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+  active?: boolean;
+  ghost?: boolean;
+}) {
+  let bg = 'transparent', color = ED_INK, border = `1px solid ${ED_RULE}`;
+  if (active) { bg = ED_INK; color = ED_PAPER; border = `1px solid ${ED_INK}`; }
+  else if (primary) { bg = ED_INK; color = ED_PAPER; border = 'none'; }
+  if (ghost) { border = 'none'; color = ED_DIM; }
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: ghost ? '12px 4px' : '12px 22px',
+        background: disabled && !ghost ? 'transparent' : bg,
+        color: disabled ? ED_DIM : color,
+        border, cursor: disabled ? 'default' : 'pointer',
+        fontFamily: 'inherit', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+        opacity: disabled && ghost ? 0.4 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Recording ─────────────────────────────────────────────────────
+
+function Recording({
+  elapsed, analyser, onStop, onCancel,
+}: {
+  elapsed: number;
+  analyser: AnalyserNode | null;
+  onStop: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Panel kicker="recording" title="Capturing tab audio"
+      right={<><span style={{ color: ED_ACC }}>●</span> live</>}
+      style={{ flex: 1, minWidth: 0 }}>
+      <div style={{
+        padding: 30, flex: 1,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 20, textAlign: 'center', minHeight: 0,
+      }}>
+        <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 4, textTransform: 'uppercase', color: ED_ACC }}>
+          <span style={{ animation: 'recPulse 1s infinite' }}>●</span> now recording
+        </div>
+        <div style={{
+          fontFamily: SERIF, fontSize: 'clamp(80px, 14vw, 160px)',
+          lineHeight: 0.92, letterSpacing: -3, fontWeight: 500,
+        }}>
+          {formatRec(elapsed).main}<span style={{ color: ED_DIM }}>{formatRec(elapsed).frac}</span>
+        </div>
+        <div style={{ width: '70%', maxWidth: 720, padding: '0 0 6px' }}>
+          <FreqBars analyser={analyser} count={48} height={120} color={ED_INK} />
+        </div>
+        <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 18, color: ED_DIM }}>
+          keep going, or stop when ready
+        </div>
+        <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+          <button onClick={onStop} style={{
+            padding: '14px 30px', background: ED_INK, color: ED_PAPER, border: 'none',
+            fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer',
+          }}>■ stop &amp; edit</button>
+          <button onClick={onCancel} style={{
+            padding: '14px 30px', background: 'transparent', color: ED_INK,
+            border: `1px solid ${ED_RULE}`,
+            fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer',
+          }}>cancel</button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+// ── FreqBars (live analyser) ──────────────────────────────────────
+
+function FreqBars({
+  analyser, count = 48, height = 120, color = ED_INK,
+}: {
+  analyser: AnalyserNode | null;
+  count?: number;
+  height?: number;
+  color?: string;
+}) {
+  const [bars, setBars] = useState<number[]>(Array(count).fill(0));
   useEffect(() => {
-    if (!analyser) return;
+    if (!analyser) { setBars(Array(count).fill(0)); return; }
     const data = new Uint8Array(analyser.frequencyBinCount);
     let raf = 0;
     const tick = () => {
       analyser.getByteFrequencyData(data);
       const bins = data.length;
       const out: number[] = [];
-      for (let i = 0; i < N; i++) {
-        const i0 = Math.floor((i / N) * bins);
-        const i1 = Math.max(i0 + 1, Math.floor(((i + 1) / N) * bins));
+      for (let i = 0; i < count; i++) {
+        const i0 = Math.floor((i / count) * bins);
+        const i1 = Math.max(i0 + 1, Math.floor(((i + 1) / count) * bins));
         let sum = 0;
         for (let j = i0; j < i1; j++) sum += data[j] ?? 0;
         out.push(sum / Math.max(1, i1 - i0) / 255);
@@ -881,258 +1073,35 @@ function RecView({ elapsed, analyser, onStop }: {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [analyser]);
+  }, [analyser, count]);
 
   return (
     <div style={{
-      minHeight: '100%', display: 'flex', flexDirection: 'column', gap: 22,
-      maxWidth: 1080, margin: '0 auto', width: '100%',
-      alignItems: 'center', justifyContent: 'center', padding: '24px 0',
+      display: 'flex', alignItems: 'flex-end', gap: 3, height, width: '100%',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <span style={{
-          width: 22, height: 22, background: '#BB0000',
-          border: '1px solid #000', animation: 'recPulse 1s infinite',
+      {bars.map((v, i) => (
+        <span key={i} style={{
+          flex: 1, height: `${Math.max(3, v * 100)}%`, background: color,
         }} />
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 56, fontWeight: 700 }}>
-          {formatT(elapsed)}
-        </span>
-      </div>
-      <div className="input-box" style={{
-        padding: 12, background: '#FFF',
-        display: 'flex', alignItems: 'flex-end', gap: 3, height: 280, width: '100%',
-      }}>
-        {bars.map((v, i) => (
-          <span key={i} style={{
-            flex: 1, height: `${Math.max(4, v * 100)}%`,
-            background: '#000',
-          }} />
-        ))}
-      </div>
-      <div style={{ fontSize: 13, color: '#444' }}>RECORDING TAB AUDIO…</div>
-      <Btn onClick={onStop} primary style={{ padding: '10px 28px', fontSize: 15 }}>
-        ■ STOP &amp; EDIT
-      </Btn>
+      ))}
     </div>
   );
 }
 
-// ── EditView ───────────────────────────────────────────────────────
-
-function EditView({
-  buffer, start, end, duration,
-  startFrac, endFrac, playheadFrac, onChangeFrac,
-  playing, looping, onPlay, onStop, onToggleLoop,
-  folders, onRequestNewFolder,
-  category, setCategory, name, setName,
-  onSave, isUpdate, canUndo, onUndo, canRedo, onRedo,
-}: {
-  buffer: AudioBuffer;
-  start: number; end: number; duration: number;
-  startFrac: number; endFrac: number; playheadFrac: number | null;
-  onChangeFrac: (s: number, e: number) => void;
-  playing: boolean; looping: boolean;
-  onPlay: () => void; onStop: () => void; onToggleLoop: () => void;
-  folders: string[];
-  onRequestNewFolder: () => void;
-  category: string; setCategory: (c: string) => void;
-  name: string; setName: (n: string) => void;
-  onSave: () => void;
-  isUpdate: boolean;
-  canUndo: boolean;
-  onUndo: () => void;
-  canRedo: boolean;
-  onRedo: () => void;
-}) {
-  const cropSec = end - start;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22, maxWidth: 1080, margin: '0 auto', width: '100%' }}>
-      <div>
-        <Waveform
-          buffer={buffer}
-          startFrac={startFrac}
-          endFrac={endFrac}
-          onChangeFrac={onChangeFrac}
-          playheadFrac={playheadFrac}
-        />
-        <div style={{
-          display: 'flex', justifyContent: 'space-between',
-          padding: '8px 14px', fontFamily: 'var(--mono)', fontSize: 13,
-          background: '#DDDDDD', border: '1px solid #000', borderTop: 'none',
-        }}>
-          <span>In: <b>{formatT(start)}</b></span>
-          <span>Out: <b>{formatT(end)}</b></span>
-          <span>Crop: <b>{formatT(cropSec)}</b></span>
-          <span style={{ color: '#666' }}>Total: {formatT(duration)}</span>
-        </div>
-      </div>
-
-      {/* transport */}
-      <div className="bevel-out" style={{
-        padding: 14, display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: 12,
-      }}>
-        <Btn onClick={onPlay} disabled={playing} style={{ padding: '6px 26px', fontSize: 13 }}>▶ PLAY</Btn>
-        <Btn onClick={onStop} disabled={!playing} style={{ padding: '6px 26px', fontSize: 13 }}>■ STOP</Btn>
-        <Btn onClick={onUndo} disabled={!canUndo} style={{ padding: '6px 26px', fontSize: 13 }}>↺ UNDO</Btn>
-        <Btn onClick={onRedo} disabled={!canRedo} style={{ padding: '6px 26px', fontSize: 13 }}>↻ REDO</Btn>
-        <Btn onClick={onToggleLoop} style={{
-          padding: '6px 26px', fontSize: 13,
-          background: looping ? '#000' : undefined,
-          color: looping ? '#FFF' : '#000',
-          fontWeight: looping ? 700 : 400,
-        }}>↻ LOOP {looping ? 'ON' : 'OFF'}</Btn>
-        <span style={{ marginLeft: 14, fontFamily: 'var(--mono)', fontSize: 12, color: '#666' }}>
-          ⌨ SPACE = PLAY/STOP
-        </span>
-      </div>
-
-      {/* save panel */}
-      <fieldset style={{
-        border: '1px solid #000', padding: 22,
-        background: '#DDDDDD',
-        margin: 0,
-      }}>
-        <legend style={{
-          padding: '0 10px', fontWeight: 700, fontSize: 13,
-          background: '#FFF', border: '1px solid #000',
-        }}>
-          SAVE SAMPLE
-        </legend>
-
-        <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-          <span style={{ width: 90, fontWeight: 700, fontSize: 13, paddingTop: 4 }}>FOLDER:</span>
-          <div style={{
-            display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1,
-          }}>
-            {folders.map(f => {
-              const active = category === f;
-              return (
-                <button key={f} onClick={() => setCategory(f)} style={{
-                  background: active ? '#000' : '#FFF',
-                  color: active ? '#FFF' : '#000',
-                  border: '1px solid #000',
-                  padding: '4px 12px',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--chicago)',
-                  fontSize: 12,
-                  fontWeight: active ? 700 : 400,
-                  textTransform: 'uppercase',
-                }}>
-                  {f}
-                </button>
-              );
-            })}
-            <button onClick={onRequestNewFolder} style={{
-              background: '#FFF', border: '1px dashed #000',
-              padding: '4px 10px', fontSize: 12, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}>+</button>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <span style={{ width: 90, fontWeight: 700, fontSize: 13 }}>NAME:</span>
-          <input value={name} onChange={e => setName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') onSave(); }}
-            placeholder={`${category}_01`}
-            className="input-box"
-            style={{ flex: 1, fontSize: 13, padding: '6px 10px' }} />
-        </div>
-
-        <div style={{
-          padding: '8px 12px', background: '#FFF',
-          border: '1px solid #000', fontFamily: 'var(--mono)', fontSize: 12,
-          marginBottom: 18,
-        }}>
-          → samples/{category}/{cleanNamePreview(name) || category + '_xx'}.wav
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <Btn onClick={onSave} primary>{isUpdate ? 'UPDATE' : 'SAVE'}</Btn>
-        </div>
-      </fieldset>
-    </div>
-  );
-}
-
-// ── AlertBox modal ─────────────────────────────────────────────────
-
-function AlertBox({ msg, onOk }: { msg: string; onOk: () => void }) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,.2)', zIndex: 100,
-    }}>
-      <div className="window" style={{ minWidth: 280, background: '#FFF' }}>
-        <TitleBar title="Collector" />
-        <div style={{ padding: 16, display: 'flex', gap: 12 }}>
-          <div style={{ fontSize: 28 }}>💾</div>
-          <div style={{ flex: 1, whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.5 }}>{msg}</div>
-        </div>
-        <div style={{ padding: '0 12px 12px', display: 'flex', justifyContent: 'flex-end' }}>
-          <Btn onClick={onOk} primary>OK</Btn>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── PromptBox modal ───────────────────────────────────────────────
-
-function PromptBox({ msg, onConfirm, onCancel }: {
-  msg: string; onConfirm: (value: string) => void; onCancel: () => void;
-}) {
-  const [value, setValue] = useState('');
-  return (
-    <div style={{
-      position: 'fixed', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,.2)', zIndex: 100,
-    }}>
-      <div className="window" style={{ minWidth: 320, background: '#FFF' }}>
-        <TitleBar title="Collector" />
-        <div style={{ padding: 16, display: 'flex', gap: 12 }}>
-          <div style={{ fontSize: 28 }}>📁</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>{msg}</div>
-            <input
-              autoFocus
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && value.trim()) onConfirm(value);
-                if (e.key === 'Escape') onCancel();
-              }}
-              className="input-box"
-              style={{ width: '100%', fontSize: 13, padding: '6px 10px' }}
-            />
-          </div>
-        </div>
-        <div style={{ padding: '0 12px 12px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Btn onClick={onCancel}>CANCEL</Btn>
-          <Btn onClick={() => value.trim() && onConfirm(value)} primary>OK</Btn>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Waveform (B&W pixelated) ───────────────────────────────────────
+// ── Waveform ──────────────────────────────────────────────────────
 
 function Waveform({
-  buffer, startFrac, endFrac, playheadFrac, onChangeFrac,
+  buffer, startFrac, endFrac, playheadFrac, onChangeFrac, duration,
 }: {
   buffer: AudioBuffer;
   startFrac: number; endFrac: number; playheadFrac: number | null;
   onChangeFrac: (s: number, e: number) => void;
+  duration: number;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [w, setW] = useState(700);
-  const height = 280;
+  const height = 240;
   const drag = useRef<{ kind: 'start' | 'end' | 'move' | null; grab?: number }>({ kind: null });
 
   useEffect(() => {
@@ -1144,60 +1113,58 @@ function Waveform({
     return () => ro.disconnect();
   }, []);
 
-  const peaks = useMemo(() => computePeaksAbs(buffer, 220), [buffer]);
+  const peaks = useMemo(() => computePeaksAbs(buffer, 200), [buffer]);
 
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
-    cv.width = w; cv.height = height;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.floor(w * dpr); cv.height = Math.floor(height * dpr);
     cv.style.width = w + 'px';
     cv.style.height = height + 'px';
     const ctx = cv.getContext('2d')!;
-    ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#FFFFFF';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Background paper
+    ctx.fillStyle = ED_PAPER;
     ctx.fillRect(0, 0, w, height);
 
-    const xs = Math.floor(startFrac * w);
-    const xe = Math.floor(endFrac * w);
+    const xs = startFrac * w;
+    const xe = endFrac * w;
 
-    // Baseline
-    ctx.fillStyle = '#000';
+    // Centerline
+    ctx.fillStyle = ED_RULE;
     ctx.fillRect(0, Math.floor(height / 2), w, 1);
 
     // Wave bars
     const n = peaks.length;
     const step = w / n;
+    const barW = Math.max(1, step - 1);
     for (let i = 0; i < n; i++) {
       const v = peaks[i] ?? 0;
       const bh = Math.max(1, Math.floor(v * (height * 0.85)));
-      const bx = Math.floor(i * step);
+      const bx = i * step;
       const inSel = bx >= xs && bx <= xe;
-      ctx.fillStyle = inSel ? '#000000' : '#888888';
-      ctx.fillRect(bx, Math.floor((height - bh) / 2), Math.max(1, Math.floor(step)), bh);
+      ctx.fillStyle = inSel ? ED_INK : ED_DIM;
+      ctx.fillRect(bx, Math.floor((height - bh) / 2), barW, bh);
     }
 
-    // Selection borders (dashed)
-    ctx.fillStyle = '#000';
-    for (let y = 0; y < height; y += 3) {
-      ctx.fillRect(xs, y, 1, 2);
-      ctx.fillRect(xe, y, 1, 2);
-    }
-    // Handles
-    ctx.fillRect(xs - 4, 0, 9, 8);
-    ctx.fillRect(xs - 4, height - 8, 9, 8);
-    ctx.fillRect(xe - 4, 0, 9, 8);
-    ctx.fillRect(xe - 4, height - 8, 9, 8);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(xs - 1, 2, 1, 1);
-    ctx.fillRect(xe - 1, 2, 1, 1);
+    // Selection vertical markers (orange)
+    ctx.fillStyle = ED_ACC;
+    ctx.fillRect(Math.floor(xs), 0, 1, height);
+    ctx.fillRect(Math.floor(xe), 0, 1, height);
 
+    // Handle caps
+    ctx.fillRect(Math.floor(xs) - 3, 0, 7, 4);
+    ctx.fillRect(Math.floor(xs) - 3, height - 4, 7, 4);
+    ctx.fillRect(Math.floor(xe) - 3, 0, 7, 4);
+    ctx.fillRect(Math.floor(xe) - 3, height - 4, 7, 4);
+
+    // Playhead
     if (playheadFrac != null && playheadFrac >= startFrac && playheadFrac <= endFrac) {
       const px = Math.floor(playheadFrac * w);
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = ED_INK;
       ctx.fillRect(px, 0, 1, height);
-      ctx.fillRect(px - 3, 0, 7, 1);
-      ctx.fillRect(px - 2, 1, 5, 1);
-      ctx.fillRect(px - 1, 2, 3, 1);
     }
   }, [peaks, w, height, startFrac, endFrac, playheadFrac]);
 
@@ -1226,21 +1193,137 @@ function Waveform({
   };
   const onUp = () => { drag.current = { kind: null }; };
 
+  // Time ticks below waveform
+  const ticks = 5;
+  const tickValues = Array.from({ length: ticks }, (_, i) => (duration * i) / (ticks - 1));
+
   return (
-    <div ref={wrapRef} className="input-box" style={{ padding: 0, background: '#fff' }}>
+    <div ref={wrapRef} style={{ position: 'relative', minHeight: height + 30 }}>
+      {/* IN / OUT labels above */}
+      <div style={{ position: 'relative', height: 18 }}>
+        <div style={{
+          position: 'absolute', bottom: 0, left: `${startFrac * 100}%`,
+          transform: 'translateX(-50%)',
+          fontFamily: SANS, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: ED_ACC,
+          pointerEvents: 'none',
+        }}>in</div>
+        <div style={{
+          position: 'absolute', bottom: 0, left: `${endFrac * 100}%`,
+          transform: 'translateX(-50%)',
+          fontFamily: SANS, fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: ED_ACC,
+          pointerEvents: 'none',
+        }}>out</div>
+      </div>
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', cursor: 'ew-resize', imageRendering: 'pixelated' }}
+        style={{ display: 'block', cursor: 'ew-resize', width: '100%' }}
         onMouseDown={onDown}
         onMouseMove={onMove}
         onMouseUp={onUp}
         onMouseLeave={onUp}
       />
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        fontFamily: SANS, fontSize: 9, color: ED_DIM, letterSpacing: 1,
+        marginTop: 6,
+      }}>
+        {tickValues.map((t, i) => <span key={i}>{formatT(t)}</span>)}
+      </div>
     </div>
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
+// ── AlertBox / PromptBox modals ───────────────────────────────────
+
+function AlertBox({ msg, onOk }: { msg: string; onOk: () => void }) {
+  return (
+    <ModalShell>
+      <div style={{ padding: '24px 26px 14px' }}>
+        <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM, marginBottom: 6 }}>
+          collector
+        </div>
+        <div style={{
+          fontFamily: SERIF, fontSize: 20, lineHeight: 1.3, color: ED_INK, whiteSpace: 'pre-wrap',
+        }}>{msg}</div>
+      </div>
+      <div style={{
+        padding: '14px 26px 22px', display: 'flex', justifyContent: 'flex-end',
+        borderTop: `1px solid ${ED_RULE}`,
+      }}>
+        <button onClick={onOk} style={{
+          padding: '12px 26px', background: ED_INK, color: ED_PAPER, border: 'none', cursor: 'pointer',
+          fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+        }}>ok</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PromptBox({ msg, onConfirm, onCancel }: {
+  msg: string; onConfirm: (v: string) => void; onCancel: () => void;
+}) {
+  const [value, setValue] = useState('');
+  return (
+    <ModalShell>
+      <div style={{ padding: '24px 26px 14px' }}>
+        <div style={{ fontFamily: SANS, fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: ED_DIM, marginBottom: 6 }}>
+          new folder
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 20, lineHeight: 1.3, color: ED_INK, marginBottom: 14 }}>{msg}</div>
+        <input
+          autoFocus
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && value.trim()) onConfirm(value);
+            if (e.key === 'Escape') onCancel();
+          }}
+          style={{
+            width: '100%',
+            background: 'transparent',
+            border: 'none', borderBottom: `1px solid ${ED_INK}`,
+            padding: '6px 0',
+            fontFamily: SERIF, fontSize: 22, color: ED_INK,
+            outline: 'none',
+          }}
+        />
+      </div>
+      <div style={{
+        padding: '14px 26px 22px', display: 'flex', justifyContent: 'flex-end', gap: 10,
+        borderTop: `1px solid ${ED_RULE}`,
+      }}>
+        <button onClick={onCancel} style={{
+          padding: '12px 22px', background: 'transparent', color: ED_INK, border: `1px solid ${ED_RULE}`,
+          fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer',
+        }}>cancel</button>
+        <button onClick={() => value.trim() && onConfirm(value)} style={{
+          padding: '12px 26px', background: ED_INK, color: ED_PAPER, border: 'none', cursor: 'pointer',
+          fontFamily: SANS, fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
+        }}>ok</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ModalShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(24, 22, 19, 0.25)', zIndex: 100,
+    }}>
+      <div style={{
+        minWidth: 340, maxWidth: 480, background: ED_PAPER,
+        border: `1px solid ${ED_RULE}`,
+        boxShadow: '0 12px 40px rgba(0,0,0,0.12)',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
 
 function computePeaksAbs(buf: AudioBuffer, n: number): number[] {
   const data = buf.getChannelData(0);
@@ -1267,4 +1350,15 @@ function formatT(s: number): string {
   const m = Math.floor(s / 60);
   const sec = s - m * 60;
   return `${m}:${sec.toFixed(2).padStart(5, '0')}`;
+}
+
+function formatRec(s: number): { main: string; frac: string } {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s - m * 60);
+  const cs = Math.floor((s - Math.floor(s)) * 100);
+  return {
+    main: `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`,
+    frac: `.${String(cs).padStart(2, '0')}`,
+  };
 }
